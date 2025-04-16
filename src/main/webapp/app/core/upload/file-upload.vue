@@ -1,35 +1,41 @@
 <template>
   <div class="upload-container">
-    <div
-      class="upload-area"
-      :class="{ 'drag-over': isDragOver }"
-      @dragover.prevent="handleDragOver"
-      @dragleave.prevent="handleDragLeave"
-      @drop.prevent="handleDrop"
-      @click="triggerFileInput"
-    >
-      <input type="file" ref="fileInput" @change="handleFileSelect" accept=".xlsx,.xls" style="display: none" />
-      <div class="upload-content">
-        <i class="fas fa-cloud-upload-alt upload-icon"></i>
-        <p class="upload-text">
-          拖拽文件到此处或点击上传
-          <br />
-          <span class="upload-hint">支持 .xlsx, .xls 格式</span>
-        </p>
+    <div class="upload-content">
+      <h4>Excel</h4>
+      <div class="file-list-container">
+        <div class="file-list" v-if="selectedFiles.length > 0">
+          <div v-for="(file, index) in selectedFiles" :key="index" class="file-item">
+            <div class="file-item-name">{{ file.name }}</div>
+            <button class="remove-btn" @click="removeFile(index)" title="移除">&times;</button>
+          </div>
+        </div>
+        <div class="no-files" v-else>No File Selected</div>
       </div>
-    </div>
 
-    <div v-if="uploadStatus" :class="['upload-status', uploadStatus.type]">
-      {{ uploadStatus.message }}
-      <button v-if="uploadStatus.type === 'error'" class="close-btn" @click="uploadStatus = null">&times;</button>
-    </div>
+      <div class="upload-actions">
+        <div class="button-group">
+          <input type="file" ref="fileInput" @change="handleFileSelect" accept=".xlsx,.xls" style="display: none" multiple />
+          <button class="action-button select-button" @click="triggerFileInput" title="选择Excel文件">
+            <i class="fas fa-file-upload"></i>
+            <span>File Selection</span>
+          </button>
+          <button
+            class="action-button upload-button"
+            @click="uploadFiles"
+            :disabled="isUploading || selectedFiles.length === 0"
+            title="上传所选文件"
+          >
+            <i class="fas fa-cloud-upload-alt" v-if="!isUploading"></i>
+            <i class="fas fa-spinner fa-spin" v-else></i>
+            <span>{{ isUploading ? 'Importing...' : 'Import' }}</span>
+          </button>
+        </div>
 
-    <div v-if="selectedFile" class="file-info">
-      <span class="file-name">{{ selectedFile.name }}</span>
-      <button class="upload-button" @click="uploadFile" :disabled="isUploading">
-        <i class="fas fa-spinner fa-spin" v-if="isUploading"></i>
-        {{ isUploading ? '上传中...' : '开始上传' }}
-      </button>
+        <div v-if="uploadStatus" :class="['upload-status', uploadStatus.type]">
+          {{ uploadStatus.message }}
+          <button v-if="uploadStatus.type === 'error'" class="close-btn" @click="uploadStatus = null">&times;</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -56,25 +62,12 @@ export default defineComponent({
   name: 'FileUpload',
   data() {
     return {
-      isDragOver: false,
-      selectedFile: null as File | null,
+      selectedFiles: [] as File[],
       isUploading: false,
       uploadStatus: null as UploadStatus | null,
     };
   },
   methods: {
-    handleDragOver(event: DragEvent) {
-      this.isDragOver = true;
-    },
-    handleDragLeave(event: DragEvent) {
-      this.isDragOver = false;
-    },
-    handleDrop(event: DragEvent) {
-      this.isDragOver = false;
-      if (event.dataTransfer?.files.length) {
-        this.validateAndSetFile(event.dataTransfer.files[0]);
-      }
-    },
     triggerFileInput() {
       const fileInput = this.$refs.fileInput as HTMLInputElement;
       fileInput.click();
@@ -82,25 +75,33 @@ export default defineComponent({
     handleFileSelect(event: Event) {
       const fileInput = event.target as HTMLInputElement;
       if (fileInput.files?.length) {
-        this.validateAndSetFile(fileInput.files[0]);
+        for (let i = 0; i < fileInput.files.length; i++) {
+          const file = fileInput.files[i];
+          if (this.validateFile(file)) {
+            this.selectedFiles.push(file);
+          }
+        }
+        // 清空 input，允许再次选择同一文件
+        fileInput.value = '';
       }
     },
-    validateAndSetFile(file: File) {
+    validateFile(file: File): boolean {
       // 根据文件扩展名检查
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
       if (fileExtension !== 'xlsx' && fileExtension !== 'xls') {
         this.uploadStatus = {
           type: 'error',
-          message: '只支持 Excel 文件格式 (.xlsx, .xls)',
+          message: `文件 "${file.name}" 不是有效的Excel文件，只支持 .xlsx 和 .xls 格式`,
         };
-        return;
+        return false;
       }
-
-      this.selectedFile = file;
-      this.uploadStatus = null;
+      return true;
     },
-    async uploadFile() {
-      if (!this.selectedFile) return;
+    removeFile(index: number) {
+      this.selectedFiles.splice(index, 1);
+    },
+    async uploadFiles() {
+      if (this.selectedFiles.length === 0) return;
 
       this.isUploading = true;
       this.uploadStatus = {
@@ -108,41 +109,70 @@ export default defineComponent({
         message: '正在上传...',
       };
 
-      const formData = new FormData();
-      formData.append('file', this.selectedFile);
-
       try {
-        const response = await apiClient.post('/import/upload', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
+        const successFiles: string[] = [];
+        const failedFiles: string[] = [];
 
-        if (response.data.success) {
+        // 逐个上传文件
+        for (const file of this.selectedFiles) {
+          try {
+            await this.uploadSingleFile(file);
+            successFiles.push(file.name);
+          } catch (error) {
+            failedFiles.push(file.name);
+          }
+        }
+
+        // 根据上传结果设置状态信息
+        if (failedFiles.length === 0) {
           this.uploadStatus = {
             type: 'success',
-            message: response.data.message || '文件上传成功',
+            message: `全部${successFiles.length}个文件上传成功`,
           };
-
-          // 触发成功事件，父组件可以监听
-          this.$emit('upload-success', response.data.data);
-
-          // 清除已选文件
-          this.selectedFile = null;
-
-          // 刷新文件列表（如果父组件提供了这个方法）
-          this.$emit('refresh');
+          this.selectedFiles = []; // 清空已选择文件列表
+        } else if (successFiles.length === 0) {
+          this.uploadStatus = {
+            type: 'error',
+            message: `全部${failedFiles.length}个文件上传失败`,
+          };
         } else {
-          throw new Error(response.data.message || '上传失败');
+          this.uploadStatus = {
+            type: 'info',
+            message: `${successFiles.length}个文件上传成功，${failedFiles.length}个文件上传失败`,
+          };
+          // 从选择文件列表中移除成功上传的文件
+          this.selectedFiles = this.selectedFiles.filter(file => !successFiles.includes(file.name));
         }
+
+        // 触发刷新事件，父组件可以监听
+        this.$emit('refresh');
       } catch (error: any) {
         this.uploadStatus = {
           type: 'error',
-          message: error.response?.data?.message || error.message || '文件上传失败，请重试',
+          message: '上传过程中发生错误：' + (error.message || '未知错误'),
         };
       } finally {
         this.isUploading = false;
       }
+    },
+    async uploadSingleFile(file: File) {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await apiClient.post('/import/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || '上传失败');
+      }
+
+      // 触发成功事件，父组件可以监听
+      this.$emit('upload-success', response.data.data);
+
+      return response.data;
     },
   },
 });
@@ -151,78 +181,128 @@ export default defineComponent({
 <style scoped>
 .upload-container {
   margin-bottom: 20px;
-}
-
-.upload-area {
-  border: 2px dashed #dcdfe6;
-  border-radius: 8px;
-  padding: 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.upload-area:hover {
-  border-color: #409eff;
-}
-
-.drag-over {
-  border-color: #409eff;
-  background-color: rgba(64, 158, 255, 0.1);
+  width: 100%;
 }
 
 .upload-content {
   display: flex;
+  gap: 20px;
+}
+
+.file-list-container {
+  flex: 1;
+  border: 2.5px solid #818181;
+  border-radius: 6px;
+  padding: 15px;
+  background-color: #d3d5cb;
+  min-height: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+  font-size: 26px;
+  padding-right: 12px;
+}
+
+.file-list {
+  display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.upload-icon {
-  font-size: 48px;
-  color: #909399;
-}
-
-.upload-text {
-  margin: 0;
-  color: #606266;
-}
-
-.upload-hint {
-  font-size: 12px;
-  color: #909399;
-}
-
-.file-info {
-  margin-top: 16px;
-  padding: 12px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.file-name {
-  color: #606266;
-  font-size: 14px;
-}
-
-.upload-button {
-  padding: 8px 16px;
-  background-color: #409eff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
-.upload-button:disabled {
-  background-color: #a0cfff;
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.file-item-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.remove-btn {
+  background: none;
+  border: none;
+  color: #ff4d4f;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.no-files {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100px;
+  color: #999;
+  font-style: italic;
+}
+
+.upload-actions {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.button-group {
+  display: flex;
+  gap: 10px;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5px;
+  padding: 5px 10px;
+  border-radius: 3px;
+  background: linear-gradient(to bottom, #fafafa 10%, rgb(223, 223, 223) 100%);
+  border: 1.5px solid #808080;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  font-size: 18px;
+  font-weight: normal;
+  color: #000000;
+  cursor: pointer;
+  height: 70px;
+  width: 160px;
+}
+
+.action-button:hover {
+  background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+}
+
+.action-button:active {
+  background: linear-gradient(to bottom, #e0e0e0 0%, #e9e9e9 100%);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.action-button:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
+}
+
+.action-button i {
+  font-size: 17px;
+}
+
+.select-button {
+  min-width: 120px;
+}
+
+.upload-button {
+  min-width: 100px;
 }
 
 .upload-status {

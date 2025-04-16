@@ -81,7 +81,7 @@ public class ImportResource {
             ImportHistory importHistory = new ImportHistory();
             importHistory.setUuid(UUID.randomUUID());
             importHistory.setTcihCode(code);
-            importHistory.setTcihFilename(originalFilename);
+            importHistory.setTcihFilename(code + "_" + originalFilename);
             importHistory.setTcihImporttime(Instant.now());
             importHistory.setTcihStatus(true);
             importHistory.setCreateBy("system"); // 或者从认证上下文中获取
