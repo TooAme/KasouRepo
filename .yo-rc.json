@@ -1,0 +1,33 @@
+{
+  "generator-jhipster": {
+    "applicationType": "monolith",
+    "authenticationType": "session",
+    "baseName": "importDB",
+    "buildTool": "maven",
+    "cacheProvider": "no",
+    "clientFramework": "vue",
+    "clientTestFrameworks": [],
+    "clientTheme": "none",
+    "creationTimestamp": 1744775537851,
+    "databaseType": "sql",
+    "devDatabaseType": "mysql",
+    "enableHibernateCache": null,
+    "enableTranslation": true,
+    "entities": [],
+    "feignClient": null,
+    "jhipsterVersion": "8.9.0",
+    "languages": ["ja", "zh-cn"],
+    "microfrontend": null,
+    "microfrontends": [],
+    "nativeLanguage": "ja",
+    "packageName": "com.chenhy",
+    "prodDatabaseType": "mysql",
+    "reactive": false,
+    "rememberMeKey": "3ee28cc95ea6d1abf61105142cb198feee4e236f1bc191981fe48fb7e82a56f287206319b920a8de2ca3732229fe99afcf89",
+    "serverPort": null,
+    "serviceDiscoveryType": null,
+    "syncUserWithIdp": null,
+    "testFrameworks": [],
+    "withAdminUi": true
+  }
+}
