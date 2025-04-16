@@ -1,0 +1,34 @@
+{
+  "importDbApp": {
+    "importHistory": {
+      "home": {
+        "title": "ImportHistories",
+        "refreshListLabel": "リストの更新",
+        "createLabel": "Import History の作成",
+        "createOrEditLabel": "Import Historyの作成または編集",
+        "notFound": "Import Histories が見つかりません。"
+      },
+      "created": "新しい Import History がID { param } で作成されました。",
+      "updated": "ID { param } の Import History が更新されました。",
+      "deleted": "ID { param } の Import History が削除されました。",
+      "delete": {
+        "question": "Import History { id }を削除してもよろしいですか？"
+      },
+      "detail": {
+        "title": "Import History"
+      },
+      "id": "ID",
+      "uuid": "Uuid",
+      "tcihCode": "Tcih Code",
+      "tcihFilename": "Tcih Filename",
+      "tcihImporttime": "Tcih Importtime",
+      "tcihStatus": "Tcih Status",
+      "createBy": "Create By",
+      "createTime": "Create Time",
+      "updateBy": "Update By",
+      "updateTime": "Update Time",
+      "delFlag": "Del Flag",
+      "remark": "Remark"
+    }
+  }
+}

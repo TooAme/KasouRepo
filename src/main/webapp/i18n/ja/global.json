@@ -7,7 +7,11 @@
       "jhipster-needle-menu-add-element": "JHipster will add additional menu entries here (do not translate!)",
       "entities": {
         "main": "エンティティ",
-        "jhipster-needle-menu-add-entry": "JHipster will add additional entities here (do not translate!)"
+        "jhipster-needle-menu-add-entry": "JHipster will add additional entities here (do not translate!)",
+        "importHistory": "Import History",
+        "importHistoryDetail": "Import History Detail",
+        "importTable": "Import Table",
+        "ssImport": "SS Import"
       },
       "account": {
         "main": "アカウント",

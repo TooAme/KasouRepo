@@ -1,0 +1,99 @@
+{
+  "annotations": {
+    "changelogDate": "20250416051209"
+  },
+  "applications": "*",
+  "fields": [
+    {
+      "fieldName": "uuid",
+      "fieldType": "UUID",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "partNumber",
+      "fieldType": "String",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "partType",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "value",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "schematicPart",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "ratingVoltage",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "ratingElectricity",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "characteristics",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "tolerance",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "manufacture",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "bCode",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "partsName",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "itemRegistrationClassification",
+      "fieldType": "Integer"
+    },
+    {
+      "fieldName": "spiceModel",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "pcbFootPrint",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "delFlag",
+      "fieldType": "Boolean"
+    },
+    {
+      "fieldName": "remark",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createTime",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "updateBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "updateTime",
+      "fieldType": "Instant"
+    }
+  ],
+  "name": "ImportTable",
+  "pagination": "pagination",
+  "relationships": [],
+  "searchEngine": "no",
+  "service": "serviceImpl"
+}

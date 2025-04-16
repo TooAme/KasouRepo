@@ -1,0 +1,54 @@
+{
+  "annotations": {
+    "changelogDate": "20250416051208"
+  },
+  "applications": "*",
+  "fields": [
+    {
+      "fieldName": "uuid",
+      "fieldType": "UUID",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "tcihdPid",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "tcihdLine",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "tcihdError",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createTime",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "updateBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "updateTime",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "delFlag",
+      "fieldType": "Boolean"
+    },
+    {
+      "fieldName": "remark",
+      "fieldType": "String"
+    }
+  ],
+  "name": "ImportHistoryDetail",
+  "pagination": "pagination",
+  "relationships": [],
+  "searchEngine": "no",
+  "service": "serviceImpl"
+}

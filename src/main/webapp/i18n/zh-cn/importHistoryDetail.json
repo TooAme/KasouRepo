@@ -1,0 +1,33 @@
+{
+  "importDbApp": {
+    "importHistoryDetail": {
+      "home": {
+        "title": "Import History Details",
+        "refreshListLabel": "Refresh list",
+        "createLabel": "创建新 Import History Detail",
+        "createOrEditLabel": "创建或编辑 Import History Detail",
+        "notFound": "No Import History Details found"
+      },
+      "created": "Import History Detail { param } 创建成功",
+      "updated": "Import History Detail { param } 更新成功",
+      "deleted": "Import History Detail { param } 删除成功",
+      "delete": {
+        "question": "你确定要删除 Import History Detail { id } 吗？"
+      },
+      "detail": {
+        "title": "Import History Detail"
+      },
+      "id": "ID",
+      "uuid": "Uuid",
+      "tcihdPid": "Tcihd Pid",
+      "tcihdLine": "Tcihd Line",
+      "tcihdError": "Tcihd Error",
+      "createBy": "Create By",
+      "createTime": "Create Time",
+      "updateBy": "Update By",
+      "updateTime": "Update Time",
+      "delFlag": "Del Flag",
+      "remark": "Remark"
+    }
+  }
+}

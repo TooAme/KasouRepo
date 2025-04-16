@@ -1,0 +1,34 @@
+{
+  "importDbApp": {
+    "sSImport": {
+      "home": {
+        "title": "SSImports",
+        "refreshListLabel": "リストの更新",
+        "createLabel": "SS Import の作成",
+        "createOrEditLabel": "SS Importの作成または編集",
+        "notFound": "SS Imports が見つかりません。"
+      },
+      "created": "新しい SS Import がID { param } で作成されました。",
+      "updated": "ID { param } の SS Import が更新されました。",
+      "deleted": "ID { param } の SS Import が削除されました。",
+      "delete": {
+        "question": "SS Import { id }を削除してもよろしいですか？"
+      },
+      "detail": {
+        "title": "SS Import"
+      },
+      "id": "ID",
+      "uuid": "Uuid",
+      "ssCreateBy": "Ss Create By",
+      "ssFilename": "Ss Filename",
+      "ssBCode": "Ss B Code",
+      "ssSubBCode": "Ss Sub B Code",
+      "createBy": "Create By",
+      "createTime": "Create Time",
+      "updateBy": "Update By",
+      "updateTime": "Update Time",
+      "delFlag": "Del Flag",
+      "remark": "Remark"
+    }
+  }
+}

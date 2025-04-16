@@ -1,0 +1,44 @@
+{
+  "importDbApp": {
+    "importTable": {
+      "home": {
+        "title": "ImportTables",
+        "refreshListLabel": "リストの更新",
+        "createLabel": "Import Table の作成",
+        "createOrEditLabel": "Import Tableの作成または編集",
+        "notFound": "Import Tables が見つかりません。"
+      },
+      "created": "新しい Import Table がID { param } で作成されました。",
+      "updated": "ID { param } の Import Table が更新されました。",
+      "deleted": "ID { param } の Import Table が削除されました。",
+      "delete": {
+        "question": "Import Table { id }を削除してもよろしいですか？"
+      },
+      "detail": {
+        "title": "Import Table"
+      },
+      "id": "ID",
+      "uuid": "Uuid",
+      "partNumber": "Part Number",
+      "partType": "Part Type",
+      "value": "Value",
+      "schematicPart": "Schematic Part",
+      "ratingVoltage": "Rating Voltage",
+      "ratingElectricity": "Rating Electricity",
+      "characteristics": "Characteristics",
+      "tolerance": "Tolerance",
+      "manufacture": "Manufacture",
+      "bCode": "B Code",
+      "partsName": "Parts Name",
+      "itemRegistrationClassification": "Item Registration Classification",
+      "spiceModel": "Spice Model",
+      "pcbFootPrint": "Pcb Foot Print",
+      "delFlag": "Del Flag",
+      "remark": "Remark",
+      "createBy": "Create By",
+      "createTime": "Create Time",
+      "updateBy": "Update By",
+      "updateTime": "Update Time"
+    }
+  }
+}

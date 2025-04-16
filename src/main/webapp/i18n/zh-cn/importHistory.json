@@ -1,0 +1,34 @@
+{
+  "importDbApp": {
+    "importHistory": {
+      "home": {
+        "title": "Import Histories",
+        "refreshListLabel": "Refresh list",
+        "createLabel": "创建新 Import History",
+        "createOrEditLabel": "创建或编辑 Import History",
+        "notFound": "No Import Histories found"
+      },
+      "created": "Import History { param } 创建成功",
+      "updated": "Import History { param } 更新成功",
+      "deleted": "Import History { param } 删除成功",
+      "delete": {
+        "question": "你确定要删除 Import History { id } 吗？"
+      },
+      "detail": {
+        "title": "Import History"
+      },
+      "id": "ID",
+      "uuid": "Uuid",
+      "tcihCode": "Tcih Code",
+      "tcihFilename": "Tcih Filename",
+      "tcihImporttime": "Tcih Importtime",
+      "tcihStatus": "Tcih Status",
+      "createBy": "Create By",
+      "createTime": "Create Time",
+      "updateBy": "Update By",
+      "updateTime": "Update Time",
+      "delFlag": "Del Flag",
+      "remark": "Remark"
+    }
+  }
+}

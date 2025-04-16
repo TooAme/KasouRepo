@@ -1,0 +1,59 @@
+{
+  "annotations": {
+    "changelogDate": "20250416051210"
+  },
+  "applications": "*",
+  "entityTableName": "ss_import",
+  "fields": [
+    {
+      "fieldName": "uuid",
+      "fieldType": "UUID",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "ssCreateBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "ssFilename",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "ssBCode",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "ssSubBCode",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createTime",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "updateBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "updateTime",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "delFlag",
+      "fieldType": "Boolean"
+    },
+    {
+      "fieldName": "remark",
+      "fieldType": "String"
+    }
+  ],
+  "name": "SSImport",
+  "pagination": "pagination",
+  "relationships": [],
+  "searchEngine": "no",
+  "service": "serviceImpl"
+}

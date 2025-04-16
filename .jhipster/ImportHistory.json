@@ -1,0 +1,58 @@
+{
+  "annotations": {
+    "changelogDate": "20250416051207"
+  },
+  "applications": "*",
+  "fields": [
+    {
+      "fieldName": "uuid",
+      "fieldType": "UUID",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "tcihCode",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "tcihFilename",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "tcihImporttime",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "tcihStatus",
+      "fieldType": "Boolean"
+    },
+    {
+      "fieldName": "createBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createTime",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "updateBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "updateTime",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "delFlag",
+      "fieldType": "Boolean"
+    },
+    {
+      "fieldName": "remark",
+      "fieldType": "String"
+    }
+  ],
+  "name": "ImportHistory",
+  "pagination": "pagination",
+  "relationships": [],
+  "searchEngine": "no",
+  "service": "serviceImpl"
+}
