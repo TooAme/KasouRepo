@@ -254,22 +254,54 @@ export default defineComponent({
   width: 100%;
   margin-bottom: 1rem;
   background-color: transparent;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 2px solid #4a4a4a; /* 深灰色外边框 */
+  border-radius: 1px;
 }
 
 .table th {
   padding: 0.75rem;
-  vertical-align: top;
-  border-top: 1px solid #dee2e6;
+  vertical-align: middle;
+  text-align: center;
+  font-weight: 400;
+  font-size: 20px;
+  background-color: #888884; /* 深灰色表头 */
+  color: black;
+  border-right: 1px solid #6a6a6a; /* 淡灰色内分割线 */
+  border-bottom: 2px solid #333;
+  border-top: none;
+}
+
+.table th:last-child {
+  border-right: none; /* 移除最后一列的右边框 */
 }
 
 .table td {
-  padding: 0.75rem;
-  vertical-align: top;
-  border-top: 1px solid #dee2e6;
+  font-size: 20px;
+  padding: 0.2rem 0.7rem;
+  vertical-align: middle;
+  /* text-align: center; */
+  background-color: #f5f5f5; /* 淡灰色单元格 */
+  border-right: 1px solid #6a6a6a; /* 淡灰色内分割线 */
+  border-bottom: 1px solid #6a6a6a; /* 淡灰色内分割线 */
 }
 
-.table-striped tbody tr:nth-of-type(odd) {
-  background-color: rgba(0, 0, 0, 0.05);
+.table td:last-child {
+  border-right: none; /* 移除最后一列的右边框 */
+}
+
+.table tr:last-child td {
+  border-bottom: none; /* 移除最后一行的底部边框 */
+}
+
+/* .table-striped tbody tr:nth-of-type(odd) td {
+  background-color: #e9e9e9; /* 条纹效果的更淡灰色 
+} */
+
+.table-striped tbody tr:hover td {
+  background-color: #e0e0e0;
+  transition: background-color 0.15s ease-in-out;
 }
 
 .hand {

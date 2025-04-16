@@ -206,6 +206,7 @@ h4 {
   color: #333;
   font-size: 26px;
   padding-right: 12px;
+  padding-left: 3px;
 }
 
 .file-list {
