@@ -6,7 +6,7 @@
         <div class="file-list" v-if="selectedFiles.length > 0">
           <div v-for="(file, index) in selectedFiles" :key="index" class="file-item">
             <div class="file-item-name">{{ file.name }}</div>
-            <button class="remove-btn" @click="removeFile(index)" title="移除">&times;</button>
+            <button class="remove-btn" @click="removeFile(index)" title="削除">&times;</button>
           </div>
         </div>
         <div class="no-files" v-else>No File Selected</div>
@@ -15,7 +15,7 @@
       <div class="upload-actions">
         <div class="button-group">
           <input type="file" ref="fileInput" @change="handleFileSelect" accept=".xlsx,.xls" style="display: none" multiple />
-          <button class="action-button select-button" @click="triggerFileInput" title="选择Excel文件">
+          <button class="action-button select-button" @click="triggerFileInput" title="Excelファイルを選択します">
             <i class="fas fa-file-upload"></i>
             <span>File Selection</span>
           </button>
@@ -23,7 +23,7 @@
             class="action-button upload-button"
             @click="uploadFiles"
             :disabled="isUploading || selectedFiles.length === 0"
-            title="上传所选文件"
+            title="選択したファイルをアップロードします"
           >
             <i class="fas fa-cloud-upload-alt" v-if="!isUploading"></i>
             <i class="fas fa-spinner fa-spin" v-else></i>
@@ -91,7 +91,7 @@ export default defineComponent({
       if (fileExtension !== 'xlsx' && fileExtension !== 'xls') {
         this.uploadStatus = {
           type: 'error',
-          message: `文件 "${file.name}" 不是有效的Excel文件，只支持 .xlsx 和 .xls 格式`,
+          message: `ファイル "${file.name}" は有効なExcelファイルではありません。.xlsx と .xls のみサポートします`,
         };
         return false;
       }
@@ -106,7 +106,7 @@ export default defineComponent({
       this.isUploading = true;
       this.uploadStatus = {
         type: 'info',
-        message: '正在上传...',
+        message: 'アップロード中...',
       };
 
       try {
@@ -127,18 +127,18 @@ export default defineComponent({
         if (failedFiles.length === 0) {
           this.uploadStatus = {
             type: 'success',
-            message: `全部${successFiles.length}个文件上传成功`,
+            message: `全部${successFiles.length}個のファイルがアップロードされました`,
           };
           this.selectedFiles = []; // 清空已选择文件列表
         } else if (successFiles.length === 0) {
           this.uploadStatus = {
             type: 'error',
-            message: `全部${failedFiles.length}个文件上传失败`,
+            message: `全部${failedFiles.length}個のファイルがアップロードに失敗しました`,
           };
         } else {
           this.uploadStatus = {
             type: 'info',
-            message: `${successFiles.length}个文件上传成功，${failedFiles.length}个文件上传失败`,
+            message: `${successFiles.length}個のファイルがアップロードされました，${failedFiles.length}個のファイルがアップロードに失敗しました`,
           };
           // 从选择文件列表中移除成功上传的文件
           this.selectedFiles = this.selectedFiles.filter(file => !successFiles.includes(file.name));
@@ -149,7 +149,7 @@ export default defineComponent({
       } catch (error: any) {
         this.uploadStatus = {
           type: 'error',
-          message: '上传过程中发生错误：' + (error.message || '未知错误'),
+          message: 'アップロード中にエラーが発生しました：' + (error.message || '未知のエラー'),
         };
       } finally {
         this.isUploading = false;
@@ -166,7 +166,7 @@ export default defineComponent({
       });
 
       if (!response.data.success) {
-        throw new Error(response.data.message || '上传失败');
+        throw new Error(response.data.message || 'アップロードに失敗しました');
       }
 
       // 触发成功事件，父组件可以监听
@@ -244,7 +244,7 @@ h4 {
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100px;
+  height: 150px;
   color: #999;
   font-style: italic;
 }

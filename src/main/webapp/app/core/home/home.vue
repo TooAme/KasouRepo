@@ -2,7 +2,7 @@
   <div class="home-container">
     <file-upload @upload-success="handleUploadSuccess" @refresh="fetchImportHistory" />
 
-    <h2>—— File Import Result List ———————————————————————————————————————————————————————————————</h2>
+    <h2>—— File Import Result List ——————————————————————————————————————————————————————————————</h2>
     <div class="header">
       <button class="refresh-button" @click="fetchImportHistory" :disabled="loading" title="リフレッシュ">
         <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
