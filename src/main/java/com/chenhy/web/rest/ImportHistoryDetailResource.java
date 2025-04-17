@@ -182,4 +182,17 @@ public class ImportHistoryDetailResource {
             .headers(HeaderUtil.createEntityDeletionAlert(applicationName, true, ENTITY_NAME, id.toString()))
             .build();
     }
+
+    /**
+     * {@code GET  /by-pid/:pid} : get the ImportHistoryDetail by pid.
+     *
+     * @param pid the pid (uuid) of the ImportHistory
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the ImportHistoryDetail, or with status {@code 404 (Not Found)}.
+     */
+    @GetMapping("/by-pid/{pid}")
+    public ResponseEntity<List<ImportHistoryDetail>> getImportHistoryDetailByPid(@PathVariable String pid) {
+        LOG.debug("REST request to get ImportHistoryDetail by pid : {}", pid);
+        List<ImportHistoryDetail> details = importHistoryDetailService.findByPid(pid);
+        return ResponseEntity.ok().body(details);
+    }
 }

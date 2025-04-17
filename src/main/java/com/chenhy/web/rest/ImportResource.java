@@ -1,8 +1,11 @@
 package com.chenhy.web.rest;
 
 import com.chenhy.domain.ImportHistory;
+import com.chenhy.domain.ImportHistoryDetail;
+import com.chenhy.service.ImportHistoryDetailService;
 import com.chenhy.service.ImportHistoryService;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,6 +14,8 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,12 +33,14 @@ public class ImportResource {
     private final Logger log = LoggerFactory.getLogger(ImportResource.class);
 
     private final ImportHistoryService importHistoryService;
+    private final ImportHistoryDetailService importHistoryDetailService;
 
     private final String uploadDirectory = "file";
 
     @Autowired
-    public ImportResource(ImportHistoryService importHistoryService) {
+    public ImportResource(ImportHistoryService importHistoryService, ImportHistoryDetailService importHistoryDetailService) {
         this.importHistoryService = importHistoryService;
+        this.importHistoryDetailService = importHistoryDetailService;
 
         // 创建上传目录
         File directory = new File(uploadDirectory);
@@ -69,45 +76,155 @@ public class ImportResource {
         }
 
         try {
-            // 生成唯一的代码
+            // 生成唯一的代码和UUID
             String code = generateFileCode();
+            UUID uuid = UUID.randomUUID();
 
             // 保存文件
             String savedFileName = code + "_" + originalFilename;
             Path targetLocation = Paths.get(uploadDirectory).resolve(savedFileName);
             Files.copy(file.getInputStream(), targetLocation);
 
+            // 检查文件内容
+            FileValidationResult validationResult = validateExcelFile(targetLocation.toString());
+
             // 创建导入历史记录
             ImportHistory importHistory = new ImportHistory();
-            importHistory.setUuid(UUID.randomUUID());
+            importHistory.setUuid(uuid);
             importHistory.setTcihCode(code);
-            importHistory.setTcihFilename(code + "_" + originalFilename);
+            importHistory.setTcihFilename(savedFileName);
             importHistory.setTcihImporttime(Instant.now());
-            importHistory.setTcihStatus(true);
-            importHistory.setCreateBy("system"); // 或者从认证上下文中获取
+            importHistory.setTcihStatus(!validationResult.hasError);
+            importHistory.setCreateBy("system");
+            importHistory.setCreateTime(Instant.now());
+            importHistory.setDelFlag(false);
 
             // 保存记录
             ImportHistory savedHistory = importHistoryService.save(importHistory);
 
-            // 触发异步导入处理（这里只是示例，实际实现可能需要更复杂的逻辑）
-            processImportFile(targetLocation.toString(), savedHistory.getId());
+            // 如果有错误，创建错误详情记录
+            if (validationResult.hasError) {
+                ImportHistoryDetail detail = new ImportHistoryDetail();
+                detail.setTcihdPid(String.valueOf(uuid));
+                uuid = UUID.randomUUID();
+                detail.setUuid(uuid);
+                detail.setTcihdLine(validationResult.getErrorLine());
+                detail.setTcihdError(validationResult.getErrorMessage());
+                detail.setCreateBy("system");
+                detail.setCreateTime(Instant.now());
+                detail.setDelFlag(false);
+                importHistoryDetailService.save(detail);
+
+                // 删除上传的文件
+                Files.deleteIfExists(targetLocation);
+            }
 
             // 构建响应
             response.put("success", true);
-            response.put("message", "文件上传成功，正在处理");
+            response.put("message", validationResult.hasError ? "文件验证失败" : "文件验证成功");
             response.put("data", savedHistory);
 
             return ResponseEntity.ok().body(response);
-        } catch (IOException e) {
-            log.error("Failed to save the file", e);
-            response.put("success", false);
-            response.put("message", "文件保存失败: " + e.getMessage());
-            return ResponseEntity.badRequest().body(response);
         } catch (Exception e) {
-            log.error("Error during file upload", e);
+            log.error("Error during file upload and validation", e);
             response.put("success", false);
-            response.put("message", "文件上传过程中发生错误: " + e.getMessage());
+            response.put("message", "文件处理过程中发生错误: " + e.getMessage());
             return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    private static class FileValidationResult {
+
+        boolean hasError;
+        StringBuilder errorMessage;
+        StringBuilder errorLine;
+
+        FileValidationResult() {
+            this.hasError = false;
+            this.errorMessage = new StringBuilder();
+            this.errorLine = new StringBuilder();
+        }
+
+        void addError(String message, String line) {
+            this.hasError = true;
+            if (errorMessage.length() > 0) {
+                errorMessage.append(",");
+                errorLine.append(",");
+            }
+            errorMessage.append(message);
+            errorLine.append(line);
+        }
+
+        String getErrorMessage() {
+            return errorMessage.toString();
+        }
+
+        String getErrorLine() {
+            return errorLine.toString();
+        }
+    }
+
+    private FileValidationResult validateExcelFile(String filePath) throws IOException {
+        try (FileInputStream fis = new FileInputStream(filePath); Workbook workbook = new XSSFWorkbook(fis)) {
+            FileValidationResult result = new FileValidationResult();
+
+            Sheet sheet = workbook.getSheetAt(1); // 获取第二个sheet
+            if (sheet == null) {
+                result.addError("ERR001_ファイルが存在しません。（The file does not exist.）", "N/A");
+                return result;
+            }
+
+            // 检查第一个sheet的A2单元格是否为管理番号（SS報部品）
+            Sheet sheet1 = workbook.getSheetAt(0);
+            Cell cellA2 = sheet1.getRow(1) != null ? sheet1.getRow(1).getCell(0) : null;
+            if (cellA2 == null || !cellA2.toString().equals("管理番号（SS報部品）")) {
+                result.addError("ERR002_ファイルフォーマットが不正です。（The file format is invalid.）", "A2");
+            }
+
+            // 检查第二个sheet的J3单元格是否为空
+            Row row3 = sheet.getRow(2);
+            if (row3 != null) {
+                Cell cellJ3 = row3.getCell(9); // J列是索引9
+                if (cellJ3 != null && !cellJ3.toString().trim().isEmpty()) {
+                    result.addError(
+                        "ERR003_インポートファイルの末端分類コードが空白です。（The import file's terminal classification code is blank.）",
+                        "J3"
+                    );
+                }
+            }
+
+            // 检查第二个sheet的L3单元格是否为空
+            if (row3 != null) {
+                Cell cellL3 = row3.getCell(11); // L列是索引11
+                if (cellL3 != null && !cellL3.toString().trim().isEmpty()) {
+                    result.addError(
+                        "ERR004_インポートファイルの末端分類名称が空白です。（The import file's terminal classification name is blank.）",
+                        "L3"
+                    );
+                }
+            }
+
+            // 检查第二个sheet的E3单元格是否存在于导入对象表中
+            if (row3 != null) {
+                Cell cellE3 = row3.getCell(4); // E列是索引4
+                if (cellE3 == null || cellE3.toString().trim().isEmpty()) {
+                    result.addError(
+                        "ERR010_インポートファイルの大分類はインポート対象外です。（The import file's classification code is not exists.）",
+                        "E3"
+                    );
+                }
+                // TODO: 这里需要添加检查E3的值是否存在于导入对象表中的逻辑
+            }
+
+            // 检查第二个sheet的L3单元格是否在导入设置表中定义了Parts Name
+            if (row3 != null) {
+                Cell cellL3 = row3.getCell(11); // L列是索引11
+                // TODO: 这里需要添加检查L3是否在导入设置表中定义了Parts Name的逻辑
+                // 如果未定义：
+                // result.addError("ERR_011: シート2のセル(L3)により、インポート設定テーブルにParts Nameが未定義です", "L3");
+            }
+
+            return result;
         }
     }
 
@@ -115,39 +232,6 @@ public class ImportResource {
      * 生成唯一的文件代码
      */
     private String generateFileCode() {
-        // 简单实现，使用UUID前6位并转为大写
         return "XJ" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-    }
-
-    /**
-     * 处理导入文件（异步）
-     *
-     * 注意：这是一个简化的实现。在实际生产环境中，
-     * 你可能需要使用更复杂的异步处理方式，如Spring的@Async或消息队列
-     */
-    private void processImportFile(String filePath, Long importHistoryId) {
-        // 模拟异步处理，实际应用中应该使用线程池或消息队列
-        new Thread(() -> {
-            try {
-                // 模拟处理时间
-                Thread.sleep(5000);
-
-                // 随机决定成功或失败（仅用于演示）
-                boolean success = Math.random() > 0.3;
-
-                // 更新导入历史状态
-                ImportHistory history = importHistoryService.findOne(importHistoryId).orElse(null);
-                if (history != null) {
-                    history.setTcihStatus(success ? true : false);
-                    importHistoryService.save(history);
-                }
-
-                log.info("File import completed: {} with status {}", filePath, success ? "SUCCESS" : "FAILURE");
-            } catch (InterruptedException e) {
-                log.error("Import processing interrupted", e);
-            } catch (Exception e) {
-                log.error("Error processing import file", e);
-            }
-        }).start();
     }
 }

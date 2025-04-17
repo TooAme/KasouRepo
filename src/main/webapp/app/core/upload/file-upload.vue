@@ -14,7 +14,7 @@
 
       <div class="upload-actions">
         <div class="button-group">
-          <input type="file" ref="fileInput" @change="handleFileSelect" accept=".xlsx,.xls" style="display: none" multiple />
+          <input type="file" ref="fileInput" @change="handleFileSelect" accept=".xlsx" style="display: none" multiple />
           <button class="action-button select-button" @click="triggerFileInput" title="Excelファイルを選択します">
             <i class="fas fa-file-upload"></i>
             <span>File Selection</span>
@@ -88,7 +88,7 @@ export default defineComponent({
     validateFile(file: File): boolean {
       // 根据文件扩展名检查
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
-      if (fileExtension !== 'xlsx' && fileExtension !== 'xls') {
+      if (fileExtension !== 'xlsx') {
         this.uploadStatus = {
           type: 'error',
           message: `ファイル "${file.name}" は有効なExcelファイルではありません。.xlsx と .xls のみサポートします`,

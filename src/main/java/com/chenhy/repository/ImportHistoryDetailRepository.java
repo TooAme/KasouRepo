@@ -1,6 +1,9 @@
 package com.chenhy.repository;
 
 import com.chenhy.domain.ImportHistoryDetail;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.stereotype.Repository;
 
@@ -9,4 +12,10 @@ import org.springframework.stereotype.Repository;
  */
 @SuppressWarnings("unused")
 @Repository
-public interface ImportHistoryDetailRepository extends JpaRepository<ImportHistoryDetail, Long> {}
+public interface ImportHistoryDetailRepository extends JpaRepository<ImportHistoryDetail, Long> {
+    Optional<ImportHistoryDetail> findByUuid(UUID uuid);
+
+    Optional<ImportHistoryDetail> findByTcihdPid(String pid);
+
+    List<ImportHistoryDetail> findByTcihdPidAndDelFlagFalse(String pid);
+}

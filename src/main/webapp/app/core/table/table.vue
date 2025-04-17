@@ -14,16 +14,43 @@
       <tbody>
         <tr v-for="(item, index) in paginatedItems" :key="index">
           <td v-for="column in columns" :key="column.field">
-            {{ item[column.field] }}
+            <template v-if="column.field === 'operate'">
+              <div v-if="item.status === 'Failure'" class="operate-buttons">
+                <button class="detail-button" @click="showErrorDetail(item)">Detail</button>
+              </div>
+              <span v-else></span>
+            </template>
+            <template v-else>
+              {{ item[column.field] }}
+            </template>
           </td>
         </tr>
       </tbody>
     </table>
 
+    <!-- 错误详情对话框 -->
+    <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>Error Details</h3>
+          <button class="close-btn" @click="closeDetailModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="currentErrorDetails">
+            <div class="error-item" v-for="(line, index) in errorLines" :key="index">
+              <div class="error-line">Line: {{ line }}</div>
+              <div class="error-message">{{ errorMessages[index] }}</div>
+            </div>
+          </div>
+          <div v-else class="no-errors">No error details available</div>
+        </div>
+      </div>
+    </div>
+
     <div class="pagination-container" v-if="totalPages > 1">
       <div class="pagination">
         <button class="page-button prev-button" @click="changePage(currentPage - 1)" :disabled="currentPage === 1" title="前のページ">
-          <i class="fa fa-chevron-left"></i> Prev
+          <i class="fa fa-chevron-left"></i>〈 Prev&nbsp;&nbsp;&nbsp;&nbsp;
         </button>
 
         <template v-if="totalPages <= maxVisibleButtons">
@@ -57,7 +84,7 @@
           :disabled="currentPage === totalPages"
           title="次のページ"
         >
-          Next ><i class="fa fa-chevron-right"></i>
+          &nbsp;&nbsp;&nbsp;&nbsp;Next 〉<i class="fa fa-chevron-right"></i>
         </button>
 
         <div class="go-to-page">
@@ -73,6 +100,7 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue';
+import axios from 'axios';
 
 interface Column {
   field: string;
@@ -82,6 +110,19 @@ interface Column {
 interface TableItem {
   [key: string]: any;
 }
+
+interface ImportHistoryDetail {
+  tcihdLine: string;
+  tcihdError: string;
+}
+
+const apiClient = axios.create({
+  baseURL: '/api',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 export default defineComponent({
   name: 'TableComponent',
@@ -117,6 +158,8 @@ export default defineComponent({
       },
       currentPage: 1,
       goToPage: '',
+      showDetailModal: false,
+      currentErrorDetails: null as ImportHistoryDetail | null,
     };
   },
   computed: {
@@ -201,6 +244,12 @@ export default defineComponent({
 
       return buttons;
     },
+    errorLines(): string[] {
+      return this.currentErrorDetails?.tcihdLine ? this.currentErrorDetails.tcihdLine.split(',') : [];
+    },
+    errorMessages(): string[] {
+      return this.currentErrorDetails?.tcihdError ? this.currentErrorDetails.tcihdError.split(',') : [];
+    },
   },
   watch: {
     // 当数据项改变时，重置到第一页
@@ -240,6 +289,25 @@ export default defineComponent({
       } else {
         this.goToPage = '';
       }
+    },
+    async showErrorDetail(item: TableItem) {
+      try {
+        const response = await apiClient.get<ImportHistoryDetail[]>('/import-history-details/by-pid/' + item.uuid);
+        if (response.data && response.data.length > 0) {
+          this.currentErrorDetails = response.data[0];
+          this.showDetailModal = true;
+        } else {
+          this.currentErrorDetails = null;
+          this.showDetailModal = true;
+        }
+      } catch (error) {
+        console.error('Failed to fetch error details:', error);
+        this.$emit('error', '获取错误详情失败');
+      }
+    },
+    closeDetailModal() {
+      this.showDetailModal = false;
+      this.currentErrorDetails = null;
     },
   },
 });
@@ -396,5 +464,88 @@ export default defineComponent({
 
 .select-button {
   min-width: 70px;
+}
+
+.detail-button {
+  /* padding: 4px 12px; */
+  /* background-color: #007bff; */
+  color: rgb(65, 43, 209);
+  border: none;
+  background-color: rgba(255, 255, 255, 0);
+  /* border-radius: 3px; */
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 20px;
+}
+
+/* .detail-button:hover {
+  color: rgb(75, 32, 192);
+  background-color: #5a6268;
+} */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 80vh;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.modal-body {
+  padding: 24px;
+  max-height: calc(80vh - 120px);
+  overflow-y: auto;
+}
+
+.error-item {
+  margin-bottom: 16px;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border-left: 4px solid #dc3545;
+}
+
+.error-line {
+  font-weight: bold;
+  color: #dc3545;
+  margin-bottom: 4px;
+}
+
+.error-message {
+  color: #666;
+}
+
+.no-errors {
+  text-align: center;
+  color: #666;
+  padding: 20px;
 }
 </style>

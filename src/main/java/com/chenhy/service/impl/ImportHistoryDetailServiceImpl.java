@@ -3,6 +3,7 @@ package com.chenhy.service.impl;
 import com.chenhy.domain.ImportHistoryDetail;
 import com.chenhy.repository.ImportHistoryDetailRepository;
 import com.chenhy.service.ImportHistoryDetailService;
+import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,5 +100,12 @@ public class ImportHistoryDetailServiceImpl implements ImportHistoryDetailServic
     public void delete(Long id) {
         LOG.debug("Request to delete ImportHistoryDetail : {}", id);
         importHistoryDetailRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ImportHistoryDetail> findByPid(String pid) {
+        LOG.debug("Request to get ImportHistoryDetail by pid : {}", pid);
+        return importHistoryDetailRepository.findByTcihdPidAndDelFlagFalse(pid);
     }
 }

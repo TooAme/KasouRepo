@@ -19,7 +19,7 @@
       loading...
     </div>
 
-    <table-component v-if="!loading" :columns="columns" :items="tableData" />
+    <table-component v-if="!loading" :columns="columns" :items="tableData" @error="handleError" />
 
     <div v-if="!loading && tableData.length === 0" class="no-data">no data</div>
   </div>
@@ -37,12 +37,12 @@ interface ImportHistory {
   tcihImporttime: string;
   tcihStatus: boolean;
   createBy: string;
+  uuid: string;
 }
 
-// 创建一个自定义的axios实例
 const apiClient = axios.create({
-  baseURL: '/api', // 设置基础URL
-  timeout: 10000, // 设置超时时间
+  baseURL: '/api',
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -71,6 +71,7 @@ export default defineComponent({
         status: string;
         operate: string;
         user: string;
+        uuid: string;
       }>,
       loading: false,
       error: '',
@@ -96,8 +97,10 @@ export default defineComponent({
       }
     },
     handleUploadSuccess(response: any) {
-      // 上传成功后刷新列表
       this.fetchImportHistory();
+    },
+    handleError(message: string) {
+      this.error = message;
     },
     async fetchImportHistory() {
       this.loading = true;
@@ -106,25 +109,25 @@ export default defineComponent({
       try {
         const response = await apiClient.get<{ data: ImportHistory[] }>('/import-histories');
 
-        // 检查响应数据的结构
         if (response.data && Array.isArray(response.data)) {
           this.tableData = response.data.map(item => ({
             code: item.tcihCode || '',
             file: item.tcihFilename || '',
             importTime: item.tcihImporttime ? this.formatDate(item.tcihImporttime) : '',
             status: item.tcihStatus === true ? 'Success' : 'Failure',
-            operate: 'Detail',
+            operate: item.tcihStatus === true ? '' : 'detail',
             user: item.createBy || '',
+            uuid: item.uuid || '',
           }));
         } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-          // 处理嵌套在data字段中的数据
           this.tableData = response.data.data.map(item => ({
             code: item.tcihCode || '',
             file: item.tcihFilename || '',
             importTime: item.tcihImporttime ? this.formatDate(item.tcihImporttime) : '',
             status: item.tcihStatus === true ? 'Success' : 'Failure',
-            operate: 'Detail',
+            operate: item.tcihStatus === true ? '' : 'detail',
             user: item.createBy || '',
+            uuid: item.uuid || '',
           }));
         } else {
           throw new Error('Invalid data format');
@@ -132,7 +135,6 @@ export default defineComponent({
       } catch (error: any) {
         let errorMessage = '获取数据失败，请稍后重试';
         if (error.response) {
-          // 服务器响应错误
           switch (error.response.status) {
             case 401:
               errorMessage = '未授权，请重新登录';
@@ -148,7 +150,6 @@ export default defineComponent({
               break;
           }
         } else if (error.request) {
-          // 请求发送失败
           errorMessage = '网络连接失败，请检查网络设置';
         }
         this.error = errorMessage;

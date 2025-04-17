@@ -1,6 +1,7 @@
 package com.chenhy.service;
 
 import com.chenhy.domain.ImportHistoryDetail;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -55,4 +56,12 @@ public interface ImportHistoryDetailService {
      * @param id the id of the entity.
      */
     void delete(Long id);
+
+    /**
+     * Get ImportHistoryDetail by pid.
+     *
+     * @param pid the pid of the ImportHistory
+     * @return the list of entities
+     */
+    List<ImportHistoryDetail> findByPid(String pid);
 }
