@@ -32,15 +32,25 @@
     <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3>Error Details</h3>
+          <!-- <h3>Error Details</h3> -->
           <button class="close-btn" @click="closeDetailModal">&times;</button>
         </div>
         <div class="modal-body">
-          <div v-if="currentErrorDetails">
-            <div class="error-item" v-for="(line, index) in errorLines" :key="index">
-              <div class="error-line">Line: {{ line }}</div>
-              <div class="error-message">{{ errorMessages[index] }}</div>
-            </div>
+          <div v-if="currentErrorDetails" class="table-responsive">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>Line</th>
+                  <th>Error Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(line, index) in errorLines" :key="index" :class="{ 'highlight-row': index === 0 }">
+                  <td>{{ line }}</td>
+                  <td>{{ errorMessages[index] }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
           <div v-else class="no-errors">No error details available</div>
         </div>
@@ -499,25 +509,27 @@ export default defineComponent({
 .modal-content {
   background-color: white;
   border-radius: 8px;
-  width: 90%;
-  max-width: 800px;
-  max-height: 80vh;
+  width: 95%;
+  max-width: 1200px;
+  max-height: 90vh;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  position: relative;
 }
 
 .modal-header {
-  padding: 16px 24px;
+  padding: 6px 1px;
   border-bottom: 1px solid #eee;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
+  height: 30px;
 }
 
-.modal-header h3 {
+/* .modal-header h3 {
   margin: 0;
   font-size: 18px;
   color: #333;
-}
+} */
 
 .modal-body {
   padding: 24px;
@@ -525,22 +537,42 @@ export default defineComponent({
   overflow-y: auto;
 }
 
-.error-item {
-  margin-bottom: 16px;
+.modal-body .table {
+  margin-bottom: 0;
+}
+
+.modal-body .table th {
+  background-color: #888884;
+  color: black;
+  font-size: 20px;
+  font-weight: 400;
   padding: 12px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  border-left: 4px solid #dc3545;
+  text-align: center;
 }
 
-.error-line {
-  font-weight: bold;
-  color: #dc3545;
-  margin-bottom: 4px;
+.modal-body .table td {
+  font-size: 18px;
+  padding: 12px;
+  padding-left: 23px;
+  font-weight: 500;
+  background-color: #f5f5f5;
 }
 
-.error-message {
+/* .highlight-row td {
+  background-color: #e6f3ff !important;
+} */
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
   color: #666;
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.close-btn:hover {
+  color: #333;
 }
 
 .no-errors {
