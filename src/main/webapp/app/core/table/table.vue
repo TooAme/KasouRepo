@@ -31,10 +31,10 @@
     <!-- 错误详情对话框 -->
     <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
       <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <!-- <h3>Error Details</h3> -->
-          <button class="close-btn" @click="closeDetailModal">&times;</button>
-        </div>
+        <!-- <div class="modal-header">
+          <h3>Error Details</h3> 
+        </div> -->
+        <button class="close-btn" @click="closeDetailModal">&times;</button>
         <div class="modal-body">
           <div v-if="currentErrorDetails" class="table-responsive">
             <table class="table table-striped">
@@ -157,14 +157,14 @@ export default defineComponent({
     // 最大显示按钮数
     maxVisibleButtons: {
       type: Number,
-      default: 5,
+      default: 6,
     },
   },
   data() {
     return {
       currentSort: {
-        field: '',
-        isAsc: true,
+        field: 'time',
+        isAsc: false,
       },
       currentPage: 1,
       goToPage: '',
@@ -407,6 +407,7 @@ export default defineComponent({
   border: 1.5px solid #8d8d8d;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   font-size: 14px;
+  font-weight: normal;
   color: #000000;
   cursor: pointer;
   display: flex;
@@ -416,26 +417,34 @@ export default defineComponent({
 
 .page-button:hover {
   background: linear-gradient(to bottom, #e9e9e9 0%, #d8d8d8 100%);
-  border-color: #8d8d8d;
 }
 
 .page-button.active {
   background: #e0e0e0;
   border-color: #8d8d8d;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
   font-weight: bold;
 }
 
 .page-button:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 .page-button.ellipsis {
-  background: transparent;
-  border: none;
-  box-shadow: none;
+  background: linear-gradient(to bottom, #f5f5f5 0%, #e6e6e6 100%);
+  border: 1.5px solid #8d8d8d;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  opacity: 0.8;
   cursor: default;
+  min-width: 36px;
+  font-weight: bold;
+  color: #000000;
+}
+
+.page-button.ellipsis:hover {
+  background: linear-gradient(to bottom, #f5f5f5 0%, #e6e6e6 100%);
+  border-color: #8d8d8d;
 }
 
 .prev-button,
@@ -466,7 +475,7 @@ export default defineComponent({
 .page-input {
   width: 40px;
   height: 32px;
-  border: 1px solid #ccc;
+  border: 1.5px solid #8d8d8d;
   border-radius: 2px;
   text-align: center;
   font-size: 14px;
@@ -508,8 +517,8 @@ export default defineComponent({
 
 .modal-content {
   background-color: white;
-  border-radius: 8px;
-  width: 95%;
+  border-radius: 3px;
+  width: 90%;
   max-width: 1200px;
   max-height: 90vh;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -532,7 +541,8 @@ export default defineComponent({
 } */
 
 .modal-body {
-  padding: 24px;
+  padding: 0px;
+  margin-bottom: -20px;
   max-height: calc(80vh - 120px);
   overflow-y: auto;
 }
@@ -568,7 +578,11 @@ export default defineComponent({
   font-size: 24px;
   color: #666;
   cursor: pointer;
+  margin: -30px;
+  margin-right: 0px;
   padding: 0 8px;
+  align-self: end;
+  z-index: 9999;
 }
 
 .close-btn:hover {

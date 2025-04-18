@@ -89,6 +89,10 @@ management:
     tags:
       application: ${spring.application.name}
 
+logging:
+  level:
+    javax.management.remote.rmi: INFO
+
 spring:
   application:
     name: importDB

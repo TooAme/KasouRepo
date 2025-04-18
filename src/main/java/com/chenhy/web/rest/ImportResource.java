@@ -69,20 +69,27 @@ public class ImportResource {
 
         // 验证文件类型
         String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || (!originalFilename.endsWith(".xlsx") && !originalFilename.endsWith(".xls"))) {
+        if (originalFilename == null || (!originalFilename.endsWith(".xlsx"))) {
             response.put("success", false);
-            response.put("message", "只支持Excel文件格式 (.xlsx, .xls)");
+            response.put("message", "只支持Excel文件格式 (.xlsx)");
             return ResponseEntity.badRequest().body(response);
         }
 
         try {
             // 生成唯一的代码和UUID
-            String code = generateFileCode();
+            String code = originalFilename.substring(0, 6).toUpperCase();
             UUID uuid = UUID.randomUUID();
 
             // 保存文件
-            String savedFileName = code + "_" + originalFilename;
+            String savedFileName = originalFilename;
             Path targetLocation = Paths.get(uploadDirectory).resolve(savedFileName);
+
+            // 如果目标路径已存在同名文件，则删除它
+            if (Files.exists(targetLocation)) {
+                Files.delete(targetLocation);
+                log.info("Deleted existing file: {}", targetLocation);
+            }
+
             Files.copy(file.getInputStream(), targetLocation);
 
             // 检查文件内容
@@ -95,7 +102,7 @@ public class ImportResource {
             importHistory.setTcihFilename(savedFileName);
             importHistory.setTcihImporttime(Instant.now());
             importHistory.setTcihStatus(!validationResult.hasError);
-            importHistory.setCreateBy("system");
+            importHistory.setCreateBy(System.getProperty("user.name"));
             importHistory.setCreateTime(Instant.now());
             importHistory.setDelFlag(false);
 
@@ -110,7 +117,7 @@ public class ImportResource {
                 detail.setUuid(uuid);
                 detail.setTcihdLine(validationResult.getErrorLine());
                 detail.setTcihdError(validationResult.getErrorMessage());
-                detail.setCreateBy("system");
+                detail.setCreateBy(System.getProperty("user.name"));
                 detail.setCreateTime(Instant.now());
                 detail.setDelFlag(false);
                 importHistoryDetailService.save(detail);
@@ -121,14 +128,14 @@ public class ImportResource {
 
             // 构建响应
             response.put("success", true);
-            response.put("message", validationResult.hasError ? "文件验证失败" : "文件验证成功");
+            response.put("message", validationResult.hasError ? "ファイル验证失败" : "ファイル验证成功");
             response.put("data", savedHistory);
 
             return ResponseEntity.ok().body(response);
         } catch (Exception e) {
             log.error("Error during file upload and validation", e);
             response.put("success", false);
-            response.put("message", "文件处理过程中发生错误: " + e.getMessage());
+            response.put("message", "ファイル処理过程中发生错误: " + e.getMessage());
             return ResponseEntity.badRequest().body(response);
         }
     }
@@ -168,70 +175,79 @@ public class ImportResource {
         try (FileInputStream fis = new FileInputStream(filePath); Workbook workbook = new XSSFWorkbook(fis)) {
             FileValidationResult result = new FileValidationResult();
 
-            Sheet sheet = workbook.getSheetAt(1); // 获取第二个sheet
-            if (sheet == null) {
-                result.addError("ERR001_ファイルが存在しません。（The file does not exist.）", "N/A");
+            // 检查工作表数量是否足够
+            if (workbook.getNumberOfSheets() < 2) {
+                result.addError("ERR001_ファイルが存在しません。", "N/A");
                 return result;
             }
 
-            // 检查第一个sheet的A2单元格是否为管理番号（SS報部品）
-            Sheet sheet1 = workbook.getSheetAt(0);
-            Cell cellA2 = sheet1.getRow(1) != null ? sheet1.getRow(1).getCell(0) : null;
-            if (cellA2 == null || !cellA2.toString().equals("管理番号（SS報部品）")) {
-                result.addError("ERR002_ファイルフォーマットが不正です。（The file format is invalid.）", "A2");
+            Sheet sheet = workbook.getSheetAt(1); // 获取第二个sheet
+            if (sheet == null) {
+                result.addError("ERR001_ファイルが存在しません。", "N/A");
+                //                return result;
             }
 
-            // 检查第二个sheet的J3单元格是否为空
+            // 检查第一个sheetのA2单元格是否为管理番号（SS報部品）
+            Sheet sheet1 = workbook.getSheetAt(0);
+            Row row1 = sheet1.getRow(1);
+            if (row1 == null) {
+                result.addError("ERR002_ファイルフォーマットが不正です。", "A2");
+            } else {
+                Cell cellA2 = row1.getCell(0);
+                if (cellA2 == null && !cellA2.toString().equals("管理番号（SS報部品）")) {
+                    result.addError("ERR002_ファイルフォーマットが不正です。", "A2");
+                }
+            }
+
+            // 检查第二个sheetのJ3单元格是否为空
             Row row3 = sheet.getRow(2);
             if (row3 != null) {
-                Cell cellJ3 = row3.getCell(9); // J列是索引9
-                if (cellJ3 != null && !cellJ3.toString().trim().isEmpty()) {
-                    result.addError(
-                        "ERR003_インポートファイルの末端分類コードが空白です。（The import file's terminal classification code is blank.）",
-                        "J3"
-                    );
+                Cell cellJ3 = row3.getCell(9); // J列は索引9
+                if (cellJ3 == null || cellJ3.toString().trim().isEmpty()) {
+                    result.addError("ERR003_インポートファイルの末端分類コードが空白です。", "J3");
                 }
+            } else {
+                result.addError("ERR003_インポートファイルの末端分類コードが空白です。", "J3");
             }
 
-            // 检查第二个sheet的L3单元格是否为空
+            // 检查第二个sheetのL3单元格是否为空
             if (row3 != null) {
-                Cell cellL3 = row3.getCell(11); // L列是索引11
-                if (cellL3 != null && !cellL3.toString().trim().isEmpty()) {
-                    result.addError(
-                        "ERR004_インポートファイルの末端分類名称が空白です。（The import file's terminal classification name is blank.）",
-                        "L3"
-                    );
+                Cell cellL3 = row3.getCell(11); // L列は索引11
+                if (cellL3 == null || cellL3.toString().trim().isEmpty()) {
+                    result.addError("ERR004_インポートファイルの末端分類名称が空白です。", "L3");
                 }
+            } else {
+                result.addError("ERR004_インポートファイルの末端分類名称が空白です。", "L3");
             }
 
-            // 检查第二个sheet的E3单元格是否存在于导入对象表中
+            // 检查第二个sheetのE3单元格是否存在于导入对象表中
             if (row3 != null) {
-                Cell cellE3 = row3.getCell(4); // E列是索引4
+                Cell cellE3 = row3.getCell(4); // E列は索引4
                 if (cellE3 == null || cellE3.toString().trim().isEmpty()) {
-                    result.addError(
-                        "ERR010_インポートファイルの大分類はインポート対象外です。（The import file's classification code is not exists.）",
-                        "E3"
-                    );
+                    result.addError("ERR010_インポートファイルの大分類はインポート対象外です。", "E3");
                 }
-                // TODO: 这里需要添加检查E3的值是否存在于导入对象表中的逻辑
+                // TODO: 这里需要添加检查E3の値是否存在于导入对象表中の逻辑
+            } else {
+                result.addError("ERR010_インポートファイルの大分類はインポート対象外です。", "E3");
             }
 
-            // 检查第二个sheet的L3单元格是否在导入设置表中定义了Parts Name
+            // 检查第二个sheetのL3单元格是否在导入設定表中定義了Parts Name
             if (row3 != null) {
-                Cell cellL3 = row3.getCell(11); // L列是索引11
-                // TODO: 这里需要添加检查L3是否在导入设置表中定义了Parts Name的逻辑
-                // 如果未定义：
+                Cell cellL3 = row3.getCell(11); // L列は索引11
+                // TODO: 这里需要添加チェックL3がインポート設定表にParts Nameが定義されているかのロジック
+                // 未定義の場合：
                 // result.addError("ERR_011: シート2のセル(L3)により、インポート設定テーブルにParts Nameが未定義です", "L3");
+            } else {
+                result.addError("ERR_011: シート2のセル(L3)により、インポート設定テーブルにParts Nameが未定義です", "L3");
             }
 
             return result;
         }
     }
-
     /**
-     * 生成唯一的文件代码
+     * 生成唯一的ファイルコード
      */
-    private String generateFileCode() {
-        return "XJ" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-    }
+    //    private String generateFileCode() {
+    //        return
+    //    }
 }

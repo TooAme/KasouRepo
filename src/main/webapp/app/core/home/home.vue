@@ -107,7 +107,13 @@ export default defineComponent({
       this.error = '';
 
       try {
-        const response = await apiClient.get<{ data: ImportHistory[] }>('/import-histories');
+        const response = await apiClient.get<{ data: ImportHistory[] }>('/import-histories', {
+          params: {
+            page: 0,
+            size: 1000, // 设置较大的页面大小以获取所有数据
+            sort: 'tcihImporttime,asc', // 按导入时间降序排序
+          },
+        });
 
         if (response.data && Array.isArray(response.data)) {
           this.tableData = response.data.map(item => ({
