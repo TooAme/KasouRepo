@@ -559,8 +559,14 @@ export default defineComponent({
   padding: 12px;
   text-align: center;
 }
-
-.modal-body .table td {
+.modal-body .table td:first-child {
+  font-size: 18px;
+  padding: 12px;
+  font-weight: 500;
+  background-color: #f5f5f5;
+  text-align: center;
+}
+.modal-body .table td:last-child {
   font-size: 18px;
   padding: 12px;
   padding-left: 23px;

@@ -139,24 +139,24 @@ export default defineComponent({
           throw new Error('Invalid data format');
         }
       } catch (error: any) {
-        let errorMessage = '获取数据失败，请稍后重试';
+        let errorMessage = 'データの取得に失敗した場合は、後で再試行をお願いします。';
         if (error.response) {
           switch (error.response.status) {
             case 401:
-              errorMessage = '未授权，请重新登录';
+              errorMessage = '未許可です,再登録してください';
               break;
             case 403:
-              errorMessage = '无权访问';
+              errorMessage = 'アクセスする権利はありません';
               break;
             case 404:
-              errorMessage = '请求的资源不存在';
+              errorMessage = '要求リソースは存在しません';
               break;
             case 500:
-              errorMessage = '服务器错误，请稍后重试';
+              errorMessage = 'サーバーが間違っています。あとでリトライしてください。';
               break;
           }
         } else if (error.request) {
-          errorMessage = '网络连接失败，请检查网络设置';
+          errorMessage = 'ネットワーク接続に失敗しました。ネットワークの設定を確認してください。';
         }
         this.error = errorMessage;
         console.error('Failed to fetch import history:', error);
