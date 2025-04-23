@@ -52,7 +52,7 @@ interface UploadStatus {
 // 创建一个自定义的axios实例
 const apiClient = axios.create({
   baseURL: '/api', // 设置基础URL
-  timeout: 10000, // 设置超时时间
+  timeout: 1000000, // 设置超时时间
   headers: {
     'Content-Type': 'application/json',
   },
