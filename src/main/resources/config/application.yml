@@ -91,7 +91,7 @@ management:
 
 logging:
   level:
-    javax.management.remote.rmi: INFO
+    javax.management.remote.rmi: FATAL
 
 spring:
   application:
@@ -172,8 +172,8 @@ server:
 file:
   upload:
     dir: ./uploads # 文件上传目录，可以使用相对路径或绝对路径
-    allowed-extensions: .xlsx,.xls # 允许的文件扩展名
-    max-files: 1 # 单次上传最大文件数
+    allowed-extensions: .xlsx # 允许的文件扩展名
+    max-files: 1000 # 单次上传最大文件数
 
 springdoc:
   show-actuator: true

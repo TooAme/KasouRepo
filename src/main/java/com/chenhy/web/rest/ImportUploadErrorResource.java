@@ -34,13 +34,19 @@ public class ImportUploadErrorResource {
 
     private final ImportHistoryService importHistoryService;
     private final ImportHistoryDetailService importHistoryDetailService;
+    private final ImportProcessResource importProcessResource;
 
     private final String uploadDirectory = "file";
 
     @Autowired
-    public ImportUploadErrorResource(ImportHistoryService importHistoryService, ImportHistoryDetailService importHistoryDetailService) {
+    public ImportUploadErrorResource(
+        ImportHistoryService importHistoryService,
+        ImportHistoryDetailService importHistoryDetailService,
+        ImportProcessResource importProcessResource
+    ) {
         this.importHistoryService = importHistoryService;
         this.importHistoryDetailService = importHistoryDetailService;
+        this.importProcessResource = importProcessResource;
 
         // 创建上传目录
         File directory = new File(uploadDirectory);
@@ -129,7 +135,7 @@ public class ImportUploadErrorResource {
                 // 删除上传的ファイル
                 Files.deleteIfExists(targetLocation);
             } else {
-                ImportProcessResource.processAllFiles(targetLocation);
+                importProcessResource.processAllFiles(targetLocation);
             }
 
             // 构建レスポンス
@@ -289,7 +295,7 @@ public class ImportUploadErrorResource {
             for (int i = 10; i < sheet.getLastRowNum() + 1; i++) { // 从第11行開始遍历
                 Row row = sheet.getRow(i);
                 if (row != null) {
-                    Cell cellN = row.getCell(13); // N列は索引14
+                    Cell cellN = row.getCell(13); // N列は索引13
                     if (cellN != null && !cellN.toString().trim().isEmpty() && !cellN.toString().trim().equals("DEL")) {
                         result.addError("ERR005_インポートファイルのOrCADパーツDB作成アプリ用フラグが不正です。", String.valueOf(i + 1));
                     }
