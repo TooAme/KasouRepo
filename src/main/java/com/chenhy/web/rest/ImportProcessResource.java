@@ -130,8 +130,10 @@ public class ImportProcessResource {
                     importTable.setUpdateBy(System.getProperty("user.name"));
                     importTable.setUpdateTime(Instant.now());
 
-                    if (getCellValue(row.getCell(20)).equals("N/A")) importTable.setPartNumber(getCellValue(row.getCell(19)));
-                    else importTable.setPartNumber(getCellValue(row.getCell(20))); // 型番
+                    if (
+                        getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)\n" + "型番（新）"))).equals("N/A")
+                    ) importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE010)\n" + "型番"))));
+                    else importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)\n" + "型番（新）")))); // 型番
                 } else {
                     // 如果数据不存在，创建新记录
                     importTable = new ImportTable();
@@ -145,11 +147,15 @@ public class ImportProcessResource {
                     importTable.setDelFlag(true);
                     importTable.setItemRegistrationClassification(3);
 
-                    if (getCellValue(row.getCell(20)).equals("N/A")) importTable.setPartNumber(getCellValue(row.getCell(19)));
-                    else importTable.setPartNumber(getCellValue(row.getCell(20))); // 型番
+                    if (
+                        getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)\n" + "型番（新）"))).equals("N/A")
+                    ) importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE010)\n" + "型番"))));
+                    else importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)\n" + "型番（新）")))); // 型番
 
-                    if (getCellValue(row.getCell(23)).equals("N/A")) importTable.setManufacture(getCellValue(row.getCell(22)));
-                    else importTable.setManufacture(getCellValue(row.getCell(23))); // manufacture
+                    if (
+                        getCellValue(row.getCell(getCellPos(characteristicRow, "(APP079)\n" + "メーカ(新)"))).equals("N/A")
+                    ) importTable.setManufacture(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP001)メーカ"))));
+                    else importTable.setManufacture(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP079)\n" + "メーカ(新)")))); // manufacture
 
                     importTable.setCreateBy(System.getProperty("user.name"));
                     importTable.setCreateTime(Instant.now());
@@ -158,7 +164,8 @@ public class ImportProcessResource {
 
                     System.out.println(mattanName);
                     importTable.setPartType(mattanName);
-                    int attributeRow = findRow2(mattanName);
+                    int attributeRow = 0;
+                    attributeRow = findRow2(mattanName);
                     System.out.println(attributeRow);
                     FileInputStream fis2 = new FileInputStream("属性項目対応表.xlsx");
                     Workbook attributeWorkbook = new XSSFWorkbook(fis2);
@@ -311,62 +318,77 @@ public class ImportProcessResource {
 
                     int LW = 1;
                     if (mattanName.contains("コンデンサ") || mattanName.contains("抵抗器")) {
-                        if (!getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（代表値）"))).isEmpty()) {
-                            if (!getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（代表値）"))).isEmpty()) LW =
+                        if (!getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（代表値）"))).isEmpty()) {
+                            if (!getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（代表値）"))).isEmpty()) LW =
                                 (int) (Double.parseDouble(
-                                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（代表値）")))
+                                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（代表値）")))
                                     ) *
                                     1000) +
                                 (int) (Double.parseDouble(
-                                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（代表値）")))
+                                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（代表値）")))
                                     ) *
                                     10);
-                            else if (getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（代表値）"))).isEmpty()) {
+                            else if (
+                                getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（代表値）"))).isEmpty()
+                            ) {
                                 LW =
                                     (int) (Double.parseDouble(
-                                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（代表値）")))
+                                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（代表値）")))
                                         ) *
                                         1000) +
                                     (int) (Double.parseDouble(
-                                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（最大値）")))
+                                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（最大値）")))
                                         ) *
                                         10);
                             }
                         } else {
                             if (
-                                !getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（代表値）"))).isEmpty() &&
-                                !getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（最大値）"))).isEmpty()
+                                !getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（代表値）"))).isEmpty() &&
+                                !getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（最大値）"))).isEmpty()
                             ) LW =
                                 (int) (Double.parseDouble(
-                                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（最大値）")))
+                                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（最大値）")))
                                     ) *
                                     1000) +
                                 (int) (Double.parseDouble(
-                                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（代表値）")))
+                                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（代表値）")))
                                     ) *
                                     10);
                             else if (
-                                !getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（代表値）"))).isEmpty() &&
-                                !getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（最大値）"))).isEmpty()
+                                !getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（最大値）"))).isEmpty() &&
+                                !getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（代表値）"))).isEmpty()
                             ) {
                                 LW =
                                     (int) (Double.parseDouble(
-                                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（最大値）")))
+                                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（代表値）")))
                                         ) *
                                         1000) +
                                     (int) (Double.parseDouble(
-                                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（最大値）")))
+                                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（最大値）")))
+                                        ) *
+                                        10);
+                            } else if (
+                                !getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（最大値）"))).isEmpty() &&
+                                !getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（最大値）"))).isEmpty()
+                            ) {
+                                LW =
+                                    (int) (Double.parseDouble(
+                                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（最大値）")))
+                                        ) *
+                                        1000) +
+                                    (int) (Double.parseDouble(
+                                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（最大値）")))
                                         ) *
                                         10);
                             }
                         }
                         if (
-                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（代表値）"))).isEmpty() &&
-                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（最大値）"))).isEmpty()
+                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（代表値）"))).isEmpty() &&
+                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)\n" + "本体長さ（最大値）"))).isEmpty()
                         ) LW = 0;
                         if (
-                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（代表値）"))).isEmpty() &&
-                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（最大値）"))).isEmpty()
+                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（代表値）"))).isEmpty() &&
+                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)\n" + "本体幅（最大値）"))).isEmpty()
                         ) LW = 0;
                     }
 
@@ -374,7 +396,7 @@ public class ImportProcessResource {
                         importTable.setSchematicPart("CE");
 
                         if (
-                            getCellValue(row.getCell(getCellPos(characteristicRow, "XJL582"))).equals("基板挿入")
+                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJL582)\n" + "実装方法\n" + "※1"))).equals("基板挿入")
                         ) importTable.setPcbFootPrint("CE_" + LW + "_DIP");
                         else importTable.setPcbFootPrint("CE_" + LW);
                     } else if (mattanName.contains("コンデンサ") && !mattanName.contains("電解コンデンサ")) {
@@ -384,7 +406,7 @@ public class ImportProcessResource {
                         //                            (int) Double.parseDouble(getCellValue(row.getCell(42))) * 1000 +
                         //                            (int) Double.parseDouble(getCellValue(row.getCell(46))) * 10;
                         if (
-                            getCellValue(row.getCell(getCellPos(characteristicRow, "XJL582"))).equals("基板挿入")
+                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJL582)\n" + "実装方法\n" + "※1"))).equals("基板挿入")
                         ) importTable.setPcbFootPrint("C_" + LW + "_DIP");
                         else importTable.setPcbFootPrint("C_" + LW);
                     } else if (mattanName.contains("固定抵抗器")) {
@@ -394,7 +416,7 @@ public class ImportProcessResource {
                         //                            (int) Double.parseDouble(getCellValue(row.getCell(42))) * 1000 +
                         //                            (int) Double.parseDouble(getCellValue(row.getCell(46))) * 10;
                         if (
-                            getCellValue(row.getCell(getCellPos(characteristicRow, "XJL582"))).equals("基板挿入")
+                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJL582)\n" + "実装方法\n" + "※1"))).equals("基板挿入")
                         ) importTable.setPcbFootPrint("R_" + LW + "_DIP");
                         else importTable.setPcbFootPrint("R_" + LW);
                     } else if (mattanName.contains("可変抵抗器")) {
@@ -404,16 +426,20 @@ public class ImportProcessResource {
                         //                            (int) Double.parseDouble(getCellValue(row.getCell(42))) * 1000 +
                         //                            (int) Double.parseDouble(getCellValue(row.getCell(46))) * 10;
                         if (
-                            getCellValue(row.getCell(getCellPos(characteristicRow, "XJL582"))).equals("基板挿入")
+                            getCellValue(row.getCell(getCellPos(characteristicRow, "(XJL582)\n" + "実装方法\n" + "※1"))).equals("基板挿入")
                         ) importTable.setPcbFootPrint("VR_" + LW + "_DIP");
                         else importTable.setPcbFootPrint("VR_" + LW);
                     } else {
-                        if (getCellValue(row.getCell(20)).equals("N/A")) {
-                            importTable.setSchematicPart(getCellValue(row.getCell(19)));
-                            importTable.setPcbFootPrint(getCellValue(row.getCell(19)));
+                        if (getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)\n" + "型番（新）"))).equals("N/A")) {
+                            importTable.setSchematicPart(getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE010)\n" + "型番"))));
+                            importTable.setPcbFootPrint(getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE010)\n" + "型番"))));
                         } else {
-                            importTable.setSchematicPart(getCellValue(row.getCell(20)));
-                            importTable.setPcbFootPrint(getCellValue(row.getCell(20)));
+                            importTable.setSchematicPart(
+                                getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)\n" + "型番（新）")))
+                            );
+                            importTable.setPcbFootPrint(
+                                getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)\n" + "型番（新）")))
+                            );
                         }
                     }
                     if (LW == 0) importTable.setPcbFootPrint("");
@@ -503,7 +529,7 @@ public class ImportProcessResource {
         return -1;
     }
 
-    public static int findRow2(String searchString) throws IOException {
+    public int findRow2(String searchString) throws IOException {
         List<Integer> matchingRows = new ArrayList<>();
 
         try (FileInputStream fis = new FileInputStream("属性項目対応表.xlsx"); Workbook workbook = new XSSFWorkbook(fis)) {
@@ -518,10 +544,12 @@ public class ImportProcessResource {
                 if (row == null) continue;
 
                 // 检查B、C、D列（0-based索引为1,2,3）
-                for (int colNum = 0; colNum < 4; colNum++) {
+                for (int colNum = 0; colNum < 5; colNum++) {
                     Cell cell = row.getCell(colNum);
+                    //System.out.println(rowNum + " " + colNum);
                     if (cell != null) {
-                        String cellValue = getCellValueAsString(cell);
+                        String cellValue = getCellValue(cell);
+                        //System.out.println("cellvalue:" + cellValue + "," + "searching string:" + searchString);
                         if (searchString.equals(cellValue)) {
                             return rowNum + 1; // 转换为1-based行号
                         }
@@ -556,7 +584,7 @@ public class ImportProcessResource {
     private Integer getCellPos(Row row, String searchString) {
         int position = 0;
         for (int i = 0; i < row.getLastCellNum() - row.getFirstCellNum(); i++) {
-            if (row.getCell(i).toString().contains(searchString)) {
+            if (row.getCell(i).toString().equals(searchString)) {
                 return position;
             }
             position++;
