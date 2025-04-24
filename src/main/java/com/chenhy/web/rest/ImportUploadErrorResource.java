@@ -4,6 +4,7 @@ import com.chenhy.domain.ImportHistory;
 import com.chenhy.domain.ImportHistoryDetail;
 import com.chenhy.service.ImportHistoryDetailService;
 import com.chenhy.service.ImportHistoryService;
+import io.micrometer.common.util.StringUtils;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -293,21 +294,55 @@ public class ImportUploadErrorResource {
             //            }
             //System.out.println("lineNum:" + lineNum);
             for (int i = 10; i < sheet.getLastRowNum() + 1; i++) { // 从第11行開始遍历
+                System.out.println(i + " " + sheet.getLastRowNum());
                 Row row = sheet.getRow(i);
-                if (row != null) {
-                    Cell cellN = row.getCell(13); // N列は索引13
-                    if (cellN != null && !cellN.toString().trim().isEmpty() && !cellN.toString().trim().equals("DEL")) {
-                        result.addError("ERR005_インポートファイルのOrCADパーツDB作成アプリ用フラグが不正です。", String.valueOf(i + 1));
-                    }
-                    Cell cellT = row.getCell(19);
-                    if (cellT == null || cellT.toString().trim().isEmpty()) {
-                        result.addError("ERR006_インポートファイルの型番が空白です。", String.valueOf(i + 1));
-                    }
+                if (
+                    isRowEmpty(row)
+                ) break; // 解决getLastRow方法不准确问题
+
+                Cell cellN = row.getCell(13); // N列は索引13
+                if (
+                    cellN != null &&
+                    !cellN.toString().trim().isEmpty() &&
+                    !cellN.toString().trim().equals("DEL") &&
+                    !cellN.toString().trim().equals("SS")
+                ) {
+                    result.addError("ERR005_インポートファイルのOrCADパーツDB作成アプリ用フラグが不正です。", String.valueOf(i + 1));
+                }
+                Cell cellT = row.getCell(19);
+                if (cellT == null || cellT.toString().trim().isEmpty()) {
+                    result.addError("ERR006_インポートファイルの型番が空白です。", String.valueOf(i + 1));
                 }
             }
 
             return result;
         }
+    }
+
+    public static boolean isRowEmpty(Row row) { // 附判断excel空行的方法（整行都为空时，停止遍历取值）
+        if (null == row) {
+            return true;
+        }
+        int firstCellNum = row.getFirstCellNum(); //第一个列位置
+        int lastCellNum = row.getLastCellNum(); //最后一列位置
+        int nullCellNum = 0; //空列数量
+        for (int c = firstCellNum; c < lastCellNum; c++) {
+            Cell cell = row.getCell(c);
+            if (null == cell || cell.getCellType().equals(CellType.BLANK)) {
+                nullCellNum++;
+                continue;
+            }
+            cell.setCellType(CellType.STRING);
+            String cellValue = cell.getStringCellValue().trim();
+            if (StringUtils.isEmpty(cellValue)) {
+                nullCellNum++;
+            }
+        }
+        //所有列都为空
+        if (nullCellNum == (lastCellNum - firstCellNum)) {
+            return true;
+        }
+        return false;
     }
     /**
      * 生成唯一的ファイルコード
