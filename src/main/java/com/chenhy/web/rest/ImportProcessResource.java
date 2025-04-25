@@ -163,7 +163,7 @@ public class ImportProcessResource {
                     importTable.setUpdateBy(System.getProperty("user.name"));
                     importTable.setUpdateTime(Instant.now()); // 创建同时也是更新
 
-                    System.out.println("末端分類名:" + mattanName);
+                    System.out.println("末端分類名: " + mattanName);
                     importTable.setPartType(mattanName);
                     int attributeRow = 0;
                     attributeRow = findRow2(mattanName);
