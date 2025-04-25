@@ -1,0 +1,31 @@
+{
+  "annotations": {
+    "changelogDate": "20250425094404"
+  },
+  "dto": "no",
+  "fields": [
+    {
+      "fieldName": "tcisCode",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "tcisType",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "tcisIncol",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "tcisEditrule",
+      "fieldType": "String"
+    }
+  ],
+  "jpaMetamodelFiltering": false,
+  "name": "ImportSetting",
+  "pagination": "infinite-scroll",
+  "readOnly": false,
+  "relationships": [],
+  "searchEngine": "no",
+  "service": "serviceImpl"
+}

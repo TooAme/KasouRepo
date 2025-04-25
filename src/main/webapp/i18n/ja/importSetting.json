@@ -1,0 +1,27 @@
+{
+  "importDbApp": {
+    "importSetting": {
+      "home": {
+        "title": "ImportSettings",
+        "refreshListLabel": "リストの更新",
+        "createLabel": "Import Setting の作成",
+        "createOrEditLabel": "Import Settingの作成または編集",
+        "notFound": "Import Settings が見つかりません。"
+      },
+      "created": "新しい Import Setting がID { param } で作成されました。",
+      "updated": "ID { param } の Import Setting が更新されました。",
+      "deleted": "ID { param } の Import Setting が削除されました。",
+      "delete": {
+        "question": "Import Setting { id }を削除してもよろしいですか？"
+      },
+      "detail": {
+        "title": "Import Setting"
+      },
+      "id": "ID",
+      "tcisCode": "Tcis Code",
+      "tcisType": "Tcis Type",
+      "tcisIncol": "Tcis Incol",
+      "tcisEditrule": "Tcis Editrule"
+    }
+  }
+}

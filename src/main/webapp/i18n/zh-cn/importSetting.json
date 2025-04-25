@@ -1,0 +1,27 @@
+{
+  "importDbApp": {
+    "importSetting": {
+      "home": {
+        "title": "Import Settings",
+        "refreshListLabel": "Refresh list",
+        "createLabel": "创建新 Import Setting",
+        "createOrEditLabel": "创建或编辑 Import Setting",
+        "notFound": "No Import Settings found"
+      },
+      "created": "Import Setting { param } 创建成功",
+      "updated": "Import Setting { param } 更新成功",
+      "deleted": "Import Setting { param } 删除成功",
+      "delete": {
+        "question": "你确定要删除 Import Setting { id } 吗？"
+      },
+      "detail": {
+        "title": "Import Setting"
+      },
+      "id": "ID",
+      "tcisCode": "Tcis Code",
+      "tcisType": "Tcis Type",
+      "tcisIncol": "Tcis Incol",
+      "tcisEditrule": "Tcis Editrule"
+    }
+  }
+}
