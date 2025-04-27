@@ -136,11 +136,10 @@ describe('Service Tests', () => {
       it('should partial update a SSImport', async () => {
         const patchObject = {
           ssCreateBy: 'BBBBBB',
-          ssFilename: 'BBBBBB',
-          ssBCode: 'BBBBBB',
-          createTime: dayjs(currentDate).format(DATE_TIME_FORMAT),
+          createBy: 'BBBBBB',
           updateBy: 'BBBBBB',
-          delFlag: true,
+          updateTime: dayjs(currentDate).format(DATE_TIME_FORMAT),
+          remark: 'BBBBBB',
           ...new SSImport(),
         };
         const returnedFromService = Object.assign(patchObject, elemDefault);

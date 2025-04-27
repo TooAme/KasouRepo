@@ -132,14 +132,7 @@ describe('Service Tests', () => {
       });
 
       it('should partial update a ImportHistoryDetail', async () => {
-        const patchObject = {
-          tcihdPid: 'BBBBBB',
-          tcihdError: 'BBBBBB',
-          createBy: 'BBBBBB',
-          createTime: dayjs(currentDate).format(DATE_TIME_FORMAT),
-          updateBy: 'BBBBBB',
-          ...new ImportHistoryDetail(),
-        };
+        const patchObject = { tcihdLine: 'BBBBBB', ...new ImportHistoryDetail() };
         const returnedFromService = Object.assign(patchObject, elemDefault);
 
         const expected = { createTime: currentDate, updateTime: currentDate, ...returnedFromService };

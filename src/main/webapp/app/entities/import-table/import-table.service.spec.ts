@@ -156,16 +156,13 @@ describe('Service Tests', () => {
       it('should partial update a ImportTable', async () => {
         const patchObject = {
           partNumber: 'BBBBBB',
-          partType: 'BBBBBB',
-          value: 'BBBBBB',
-          ratingVoltage: 'BBBBBB',
-          characteristics: 'BBBBBB',
           tolerance: 'BBBBBB',
-          bCode: 'BBBBBB',
-          partsName: 'BBBBBB',
+          manufacture: 'BBBBBB',
           itemRegistrationClassification: 1,
+          pcbFootPrint: 'BBBBBB',
+          delFlag: true,
           createBy: 'BBBBBB',
-          createTime: dayjs(currentDate).format(DATE_TIME_FORMAT),
+          updateBy: 'BBBBBB',
           ...new ImportTable(),
         };
         const returnedFromService = Object.assign(patchObject, elemDefault);

@@ -4,11 +4,10 @@ import static java.lang.Long.valueOf;
 
 import com.chenhy.domain.ImportSetting;
 import com.chenhy.domain.ImportTable;
+import com.chenhy.domain.SSImport;
 import com.chenhy.repository.ImportTableRepository;
-import com.chenhy.service.ImportHistoryDetailService;
-import com.chenhy.service.ImportHistoryService;
-import com.chenhy.service.ImportSettingService;
-import com.chenhy.service.ImportTableService;
+import com.chenhy.repository.SSImportRepository;
+import com.chenhy.service.*;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import java.io.File;
 import java.io.FileInputStream;
@@ -36,21 +35,26 @@ public class ImportProcessResource {
     private final ImportSettingService importSettingService;
     private final ImportTableService importTableService;
     private final ImportTableRepository importTableRepository;
+    private final SSImportRepository sSImportRepository;
+    private final SSImportService sSImportService;
 
     @Autowired
     public ImportProcessResource(
         ImportHistoryService importHistoryService,
         ImportHistoryDetailService importHistoryDetailService,
         ImportSettingService importSettingService,
-        ImportSettingService importSettingService1,
         ImportTableService importTableService,
-        ImportTableRepository importTableRepository
+        ImportTableRepository importTableRepository,
+        SSImportRepository sSImportRepository,
+        SSImportService sSImportService
     ) {
         this.importHistoryService = importHistoryService;
         this.importHistoryDetailService = importHistoryDetailService;
         this.importSettingService = importSettingService;
         this.importTableService = importTableService;
         this.importTableRepository = importTableRepository;
+        this.sSImportRepository = sSImportRepository;
+        this.sSImportService = sSImportService;
     }
 
     public void processAllFiles(Path filePath) {
@@ -91,6 +95,7 @@ public class ImportProcessResource {
         }
         for (File file : ssListFile) {
             //System.out.println("Processing ssListFile");
+            sSImportRepository.deleteAll();
             processSsListFile(file);
         }
     }
@@ -111,11 +116,9 @@ public class ImportProcessResource {
                     continue; // 跳过空行
                 }
 
-                if ("DEL".equals(getCellValue(row.getCell(13)))) { // flag为DEL删除该行重来
+                if (getCellValue(row.getCell(13)).equals("DEL")) { // flag为DEL删除该行重来
                     sheet.removeRow(row); // 物理删除
-                    Optional<ImportTable> existingTable = importTableRepository.findByBCode(
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(APP004)管理番号")))
-                    );
+                    Optional<ImportTable> existingTable = importTableRepository.findByBCode(getCellValue(row.getCell(28)));
                     // 实体数据删除
                     existingTable.ifPresent(importTable -> importTableService.delete(importTable.getId()));
                     rowIndex--;
@@ -123,7 +126,7 @@ public class ImportProcessResource {
                 }
 
                 // 获取 bcode 値
-                String bcode = getCellValue(row.getCell(getCellPos(characteristicRow, "(APP004)管理番号")));
+                String bcode = getCellValue(row.getCell(28));
                 if (bcode == null || bcode.isEmpty()) {
                     continue; // 如果 bcode 为空，跳过当前行
                 }
@@ -131,6 +134,11 @@ public class ImportProcessResource {
                 // 检查数据是否存在
                 Optional<ImportTable> existingTable = importTableRepository.findByBCode(bcode);
                 ImportTable importTable;
+                if (
+                    existingTable.isPresent()
+                ) { // 检验是否为ss部品，是则跳过//TODO:修改逻辑位置
+                    if (existingTable.get().getPartNumber().equals("-")) continue;
+                }
                 if (existingTable.isPresent()) {
                     // 如果数据已存在，更新该条记录
                     importTable = existingTable.get();
@@ -138,10 +146,40 @@ public class ImportProcessResource {
                     importTable.setUpdateBy(System.getProperty("user.name"));
                     importTable.setUpdateTime(Instant.now());
 
+                    //                    System.out.println(getCellValue(row.getCell(13)) + "!!!!!!!!!!!!!!!!!!!");
                     if (
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）"))).equals("N/A")
-                    ) importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE010)型番"))));
-                    else importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）")))); // 型番
+                        getCellValue(row.getCell(13)).equals("SS")
+                    ) { // SS处理
+                        String ssSubBCode = getCellValue(row.getCell(28));
+                        Optional<SSImport> existingSSImport = sSImportRepository.findBySsSubBCode(ssSubBCode);
+                        SSImport ssImport;
+                        System.out.println(
+                            "SS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" + getCellValue(row.getCell(28)) + " " + existingSSImport.toString()
+                        );
+                        if (existingSSImport.isPresent()) {
+                            ssImport = existingSSImport.get();
+                            ssImport.setUpdateBy(System.getProperty("user.name"));
+                            ssImport.setUpdateTime(Instant.now());
+                            System.out.println("SS更新中: " + ssSubBCode);
+                            sSImportService.save(ssImport);
+                        } else {
+                            //                            ssImport = new SSImport();
+                            //                            ssImport.setUuid(importTable.getUuid());
+                            //                            ssImport.setSsSubBCode(importTable.getbCode());
+                            //                            ssImport.setSsCreateBy(System.getProperty("user.name"));
+                            //                            ssImport.setSsFilename(file.getName());
+                            //                            ssImport.setCreateBy(importTable.getCreateBy());
+                            //                            ssImport.setCreateTime(importTable.getCreateTime());
+                            //                            ssImport.setUpdateBy(System.getProperty("user.name"));
+                            //                            ssImport.setUpdateTime(Instant.now());
+                            //                            ssImport.setDelFlag(importTable.getDelFlag());
+                            //                            System.out.println("SS新規作成中: " + ssSubBCode);
+                        }
+                    }
+                    //                    if (
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）"))).equals("N/A")
+                    //                    ) importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE010)型番"))));
+                    //                    else importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）")))); // 型番
                 } else {
                     // 如果数据不存在，创建新记录
                     importTable = new ImportTable();
@@ -150,20 +188,20 @@ public class ImportProcessResource {
                     UUID uuid = UUID.randomUUID();
                     importTable.setUuid(uuid); // uuid
 
-                    importTable.setbCode(bcode);
+                    //                    importTable.setbCode(bcode);
+                    //
+                    //                    importTable.setDelFlag(true);
+                    //                    importTable.setItemRegistrationClassification(3);
 
-                    importTable.setDelFlag(true);
-                    importTable.setItemRegistrationClassification(3);
+                    //                    if (
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）"))).equals("N/A")
+                    //                    ) importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE010)型番"))));
+                    //                    else importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）")))); // 型番
 
-                    if (
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）"))).equals("N/A")
-                    ) importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE010)型番"))));
-                    else importTable.setPartNumber(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）")))); // 型番
-
-                    if (
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(APP079)メーカ(新)"))).equals("N/A")
-                    ) importTable.setManufacture(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP001)メーカ"))));
-                    else importTable.setManufacture(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP079)メーカ(新)")))); // manufacture
+                    //                    if (
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(APP079)メーカ(新)"))).equals("N/A")
+                    //                    ) importTable.setManufacture(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP001)メーカ"))));
+                    //                    else importTable.setManufacture(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP079)メーカ(新)")))); // manufacture
 
                     importTable.setCreateBy(System.getProperty("user.name"));
                     importTable.setCreateTime(Instant.now());
@@ -171,7 +209,7 @@ public class ImportProcessResource {
                     importTable.setUpdateTime(Instant.now()); // 创建同时也是更新
 
                     System.out.println("末端分類名: " + mattanName);
-                    importTable.setPartType(mattanName);
+                    //importTable.setPartType(mattanName);
                     int attributeRow = 0;
                     attributeRow = findRow2(mattanName);
                     System.out.println("属性項目対応表に対応行: Row" + attributeRow);
@@ -179,7 +217,21 @@ public class ImportProcessResource {
                     Workbook attributeWorkbook = new XSSFWorkbook(fis2);
                     Sheet attributeSheet = attributeWorkbook.getSheetAt(0);
 
+                    setTableCharacter(importTable, row, "COMMON", "SCHEMATIC_PART");
+                    //                    setTableCharacter(importTable, row, "COMMON" , "PART_TYPE");
+                    importTable.setPartType(mattanName);
+                    setTableCharacter(importTable, row, "COMMON", "PART_NUMBER");
+                    setTableCharacter(importTable, row, "COMMON", "MANUFACTURE");
+                    setTableCharacter(importTable, row, "COMMON", "B_CODE");
+                    setTableCharacter(importTable, row, "COMMON", "ITEM_REGISTRATION_CLASSFICATION");
+                    setTableCharacter(importTable, row, "COMMON", "SPICE_MODEL");
                     setTableCharacter(importTable, row, mattanName, "VALUE");
+                    setTableCharacter(importTable, row, mattanName, "CHARACTERISTICS");
+                    setTableCharacter(importTable, row, mattanName, "TOLERANCE");
+                    setTableCharacter(importTable, row, mattanName, "RATING_VOLTAGE");
+                    setTableCharacter(importTable, row, mattanName, "RATING_ELECTRICITY");
+                    setTableCharacter(importTable, row, mattanName, "SCHEMATIC_PART");
+                    setTableCharacter(importTable, row, mattanName, "PARTS_NAME");
                     //                    String valueFlag = String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(6)); // Value栏日语在上一行所以减一
                     //                    switch (valueFlag) {
                     //                        case "定数" -> {
@@ -308,74 +360,75 @@ public class ImportProcessResource {
                     //                        }
                     //                    }
 
-                    if (String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(9)).equals("定格電圧")) importTable.setRatingVoltage(
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJG930)定格電圧"))) +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJG930)定格電圧_単位")))
-                    );
-                    if (
-                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(11)).equals("定格電力")
-                    ) importTable.setRatingElectricity(
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJF711)定格電力"))) +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJF711)定格電力_単位")))
-                    );
-                    if (
-                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(12)).equals("温度特性")
-                    ) importTable.setCharacteristics(getCellValue(row.getCell(getCellPos(characteristicRow, "(XJF420)温度特性"))));
-                    if (
-                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(12)).equals("周波数温度特性")
-                    ) importTable.setCharacteristics(
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE388)周波数温度特性"))) +
-                        " " +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE388)周波数温度特性_単位")))
-                    );
-                    if (
-                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(13)).equals("抵抗値の許容差(+-)")
-                    ) importTable.setTolerance(
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJF713)抵抗値の許容差(+-)"))) +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJF713)抵抗値の許容差(+-)_単位")))
-                    );
-                    if (
-                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(13)).equals("公称ゼロ負荷抵抗値の許容差")
-                    ) importTable.setTolerance(
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJG662)公称ゼロ負荷抵抗値の許容差"))) +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJG662)公称ゼロ負荷抵抗値の許容差_単位")))
-                    );
-                    if (
-                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(13)).equals(
-                            "インダクタンス許容差(最小値),インダクタンス許容差(最大値)"
-                        )
-                    ) importTable.setTolerance(
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE228)インダクタンス許容差（最小値）"))) +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE228)インダクタンス許容差(最小値)_単位"))) +
-                        "," +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE228)インダクタンス許容差（最大値）"))) +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE228)インダクタンス許容差(最大値)_単位")))
-                    );
-                    if (
-                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(13)).equals(
-                            "定格静電容量許容差(最小値),定格静電容量許容差(最大値)"
-                        )
-                    ) importTable.setTolerance(
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE261)定格静電容量許容差（最小値）"))) +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE261)定格静電容量許容差（最小値）_単位"))) +
-                        "," +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE261)定格静電容量許容差（最大値）"))) +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE261)定格静電容量許容差（最大値）_単位")))
-                    );
-                    if (
-                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(13)).equals(
-                            "周波数許容差(最小値),周波数許容差(最大値)"
-                        )
-                    ) importTable.setTolerance(
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK452)周波数許容差（最小値）"))) +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK452)周波数許容差（最小値）_単位"))) +
-                        "," +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK452)周波数許容差（最大値）"))) +
-                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK452)周波数許容差（最大値）_単位")))
-                    );
-
-                    importTable.setPartsName(String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(17)));
-                    if (String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(17)).equals("なし")) importTable.setPartsName("");
+                    //----------------
+                    //                    if (String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(9)).equals("定格電圧")) importTable.setRatingVoltage(
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJG930)定格電圧"))) +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJG930)定格電圧_単位")))
+                    //                    );
+                    //                    if (
+                    //                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(11)).equals("定格電力")
+                    //                    ) importTable.setRatingElectricity(
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJF711)定格電力"))) +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJF711)定格電力_単位")))
+                    //                    );
+                    //                    if (
+                    //                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(12)).equals("温度特性")
+                    //                    ) importTable.setCharacteristics(getCellValue(row.getCell(getCellPos(characteristicRow, "(XJF420)温度特性"))));
+                    //                    if (
+                    //                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(12)).equals("周波数温度特性")
+                    //                    ) importTable.setCharacteristics(
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE388)周波数温度特性"))) +
+                    //                        " " +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE388)周波数温度特性_単位")))
+                    //                    );
+                    //                    if (
+                    //                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(13)).equals("抵抗値の許容差(+-)")
+                    //                    ) importTable.setTolerance(
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJF713)抵抗値の許容差(+-)"))) +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJF713)抵抗値の許容差(+-)_単位")))
+                    //                    );
+                    //                    if (
+                    //                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(13)).equals("公称ゼロ負荷抵抗値の許容差")
+                    //                    ) importTable.setTolerance(
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJG662)公称ゼロ負荷抵抗値の許容差"))) +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJG662)公称ゼロ負荷抵抗値の許容差_単位")))
+                    //                    );
+                    //                    if (
+                    //                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(13)).equals(
+                    //                            "インダクタンス許容差(最小値),インダクタンス許容差(最大値)"
+                    //                        )
+                    //                    ) importTable.setTolerance(
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE228)インダクタンス許容差（最小値）"))) +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE228)インダクタンス許容差(最小値)_単位"))) +
+                    //                        "," +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE228)インダクタンス許容差（最大値）"))) +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE228)インダクタンス許容差(最大値)_単位")))
+                    //                    );
+                    //                    if (
+                    //                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(13)).equals(
+                    //                            "定格静電容量許容差(最小値),定格静電容量許容差(最大値)"
+                    //                        )
+                    //                    ) importTable.setTolerance(
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE261)定格静電容量許容差（最小値）"))) +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE261)定格静電容量許容差（最小値）_単位"))) +
+                    //                        "," +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE261)定格静電容量許容差（最大値）"))) +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE261)定格静電容量許容差（最大値）_単位")))
+                    //                    );
+                    //                    if (
+                    //                        String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(13)).equals(
+                    //                            "周波数許容差(最小値),周波数許容差(最大値)"
+                    //                        )
+                    //                    ) importTable.setTolerance(
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK452)周波数許容差（最小値）"))) +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK452)周波数許容差（最小値）_単位"))) +
+                    //                        "," +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK452)周波数許容差（最大値）"))) +
+                    //                        getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK452)周波数許容差（最大値）_単位")))
+                    //                    );
+                    //
+                    //                    importTable.setPartsName(String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(17)));
+                    //                    if (String.valueOf(attributeSheet.getRow(attributeRow - 2).getCell(17)).equals("なし")) importTable.setPartsName("");
 
                     int LW = 0;
                     if (mattanName.contains("コンデンサ") || mattanName.contains("抵抗器")) {
@@ -517,7 +570,10 @@ public class ImportProcessResource {
                             importTable.setPcbFootPrint(getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）"))));
                         }
                     }
-                    if (LW == 0) importTable.setPcbFootPrint("");
+                    if (LW == 0) {
+                        importTable.setPcbFootPrint("");
+                        setTableCharacter(importTable, row, mattanName, "PACKAGE_TYPE");
+                    }
                 }
 
                 // 调用服务保存或更新记录
@@ -548,6 +604,50 @@ public class ImportProcessResource {
     private void processSsListFile(File file) {
         System.out.println("SSリストファイル処理中:" + file.getName());
         // ss清单文件处理
+        try (FileInputStream fis = new FileInputStream(file)) {
+            Workbook ssworkbook = new XSSFWorkbook(fis);
+            Sheet sheetss = ssworkbook.getSheetAt(0); // 获取第一个工作表
+
+            // 遍历第 3 行到最后一行的数据
+            for (int rowIndex = 2; rowIndex <= sheetss.getLastRowNum(); rowIndex++) {
+                Row row = sheetss.getRow(rowIndex);
+                if (row == null) {
+                    continue; // 跳过空行
+                }
+                if (!getCellValue(row.getCell(1)).isEmpty()) {
+                    String ssSubBCode = getCellValue(row.getCell(1));
+                    Optional<ImportTable> targetTable = importTableRepository.findByBCode(ssSubBCode);
+                    SSImport ssImport;
+                    if (targetTable.isPresent()) {
+                        ssImport = new SSImport();
+                        UUID uuid = UUID.randomUUID();
+                        ssImport.setUuid(uuid);
+                        for (
+                            int j = 0;
+                            j < sheetss.getLastRowNum();
+                            j++
+                        ) if (sheetss.getRow(rowIndex - j).getCell(0) != null && rowIndex - j > 2) { // 向上寻找亲部品管理番号
+                            ssImport.setSsBCode(getCellValue(sheetss.getRow(rowIndex - j).getCell(0)));
+                            break;
+                        }
+                        ssImport.setSsSubBCode(targetTable.get().getbCode());
+                        ssImport.setSsCreateBy(System.getProperty("user.name"));
+                        ssImport.setSsFilename(targetTable.get().getPartType()); //写的是文件名，但是获取不到
+                        ssImport.setCreateBy(targetTable.get().getCreateBy());
+                        ssImport.setCreateTime(targetTable.get().getCreateTime());
+                        ssImport.setUpdateBy(System.getProperty("user.name"));
+                        ssImport.setUpdateTime(Instant.now());
+                        ssImport.setDelFlag(true);
+                        System.out.println("SS新規作成中: " + ssSubBCode);
+                        sSImportService.save(ssImport);
+                        targetTable.get().setPartNumber("-");
+                        importTableRepository.save(targetTable.get());
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public String getMiddlePart(String fileName) { // 从文件名获取parttype
@@ -676,29 +776,131 @@ public class ImportProcessResource {
     public void setTableCharacter(ImportTable importTable, Row row, String settingCharacter1, String settingCharacter2) {
         // 查询 ImportSetting 表中同时包含 settingCharacter1 和 settingCharacter2 的记录
         Optional<ImportSetting> setting = importSettingService.findOneByTcisCodeAndTcisType(settingCharacter1, settingCharacter2);
-
         if (setting.isPresent()) {
-            switch (settingCharacter2) {
-                case "VALUE":
-                    String tcisIncol = setting.get().getTcisIncol();
-                    String tcisEditrule = setting.get().getTcisEditrule();
-
-                    // 检查 tcisIncol 和 tcisEditrule 是否为 null
-                    if ((tcisIncol == null || tcisIncol.isEmpty()) && (tcisEditrule != null && !tcisEditrule.isEmpty())) {
-                        importTable.setValue(tcisEditrule);
-                    } else if ((tcisEditrule == null || tcisEditrule.isEmpty()) && (tcisIncol != null && !tcisIncol.isEmpty())) {
+            String tcisIncol = setting.get().getTcisIncol();
+            String tcisEditrule = setting.get().getTcisEditrule();
+            System.out.println("findin:" + setting.get().getId() + " tcisIncol:" + tcisIncol + ", tcisEditrule:" + tcisEditrule);
+            // 动态值
+            if ((tcisEditrule == null || tcisEditrule.isEmpty()) && (tcisIncol != null && !tcisIncol.isEmpty())) {
+                switch (settingCharacter2) {
+                    case "SCHEMATIC_PART":
+                        importTable.setSchematicPart(getComplexCellValue(row, cvt(tcisIncol)));
+                        break;
+                    case "DEL":
+                        {
+                            if (getComplexCellValue(row, cvt(tcisIncol)).isEmpty()) {
+                                importTable.setDelFlag(true);
+                            } else if (getComplexCellValue(row, cvt(tcisIncol)).equals("DEL")) {
+                                importTable.setDelFlag(false);
+                            }
+                        }
+                        break;
+                    //                    case "PART_TYPE":
+                    //                        importTable.setPartType(getComplexCellValue(row, cvt(tcisIncol)));
+                    //                        break;
+                    case "PART_NUMBER":
+                        {
+                            if (getCellValue(row.getCell(Integer.parseInt(cvt(tcisIncol)) + 1)).equals("N/A")) importTable.setPartNumber(
+                                getComplexCellValue(row, cvt(tcisIncol))
+                            );
+                            else importTable.setPartNumber(getCellValue(row.getCell(Integer.parseInt(cvt(tcisIncol)) + 1)));
+                        }
+                        break;
+                    case "MANUFACTURE":
+                        {
+                            if (getCellValue(row.getCell(Integer.parseInt(cvt(tcisIncol)) + 1)).equals("N/A")) importTable.setManufacture(
+                                getComplexCellValue(row, cvt(tcisIncol))
+                            );
+                            else importTable.setManufacture(getCellValue(row.getCell(Integer.parseInt(cvt(tcisIncol)) + 1)));
+                        }
+                        break;
+                    case "B_CODE":
+                        importTable.setbCode(getComplexCellValue(row, cvt(tcisIncol)));
+                        break;
+                    case "ITEM_REGISTRATION_CLASSFICATION":
+                        importTable.setItemRegistrationClassification(Integer.parseInt(getComplexCellValue(row, cvt(tcisIncol))));
+                        break;
+                    case "SPICE_MODEL":
+                        importTable.setSpiceModel(getComplexCellValue(row, cvt(tcisIncol)));
+                        break;
+                    case "VALUE":
                         importTable.setValue(getComplexCellValue(row, cvt(tcisIncol)));
-                    } else {
-                        importTable.setValue("");
-                    }
-                    break;
-                // 其他 case 可以根据需求补充
-                //            case "tcis_incol":
-                //                importTable.setTableCharacter(setting.get().getTcisIncol());
-                //                break;
-                //            case "tcis_code":
-                //                importTable.setTableCharacter(setting.get().getTcisCode());
-                //                break;
+                        break;
+                    case "PARTS_NAME":
+                        importTable.setPartsName(getComplexCellValue(row, cvt(tcisIncol)));
+                        break;
+                    case "PART_TYPE":
+                        {
+                            if (row.getCell(Integer.parseInt(cvt(tcisIncol))) == null) importTable.setPartType(importTable.getPartNumber());
+                        }
+                        break;
+                    case "TOLERANCE":
+                        importTable.setTolerance(getComplexCellValue(row, cvt(tcisIncol)));
+                        break;
+                    case "RATING_VOLTAGE":
+                        importTable.setRatingVoltage(getComplexCellValue(row, cvt(tcisIncol)));
+                        break;
+                    case "CHARACTERISTICS":
+                        importTable.setCharacteristics(getComplexCellValue(row, cvt(tcisIncol)));
+                        break;
+                    case "RATING_ELECTRICITY":
+                        importTable.setRatingElectricity(getComplexCellValue(row, cvt(tcisIncol)));
+                        break;
+                    case "PACKAGE_TYPE":
+                        importTable.setPcbFootPrint(getComplexCellValue(row, cvt(tcisIncol))); // 仅在无pcb时调用
+                        break;
+                }
+            }
+            // 定值
+            if ((tcisIncol == null || tcisIncol.isEmpty()) && (tcisEditrule != null && !tcisEditrule.isEmpty())) {
+                switch (settingCharacter2) {
+                    case "SCHEMATIC_PART":
+                        importTable.setSchematicPart(tcisEditrule);
+                        break;
+                    case "DEL":
+                        {}
+                        break;
+                    //                    case "PART_TYPE":
+                    //                        importTable.setPartType(tcisEditrule);
+                    //                        break;
+                    case "PART_NUMBER":
+                        importTable.setPartNumber(tcisEditrule);
+                        break;
+                    case "MANUFACTURE":
+                        importTable.setManufacture(tcisEditrule);
+                        break;
+                    case "B_CODE":
+                        importTable.setbCode(tcisEditrule);
+                        break;
+                    case "VALUE":
+                        importTable.setValue(tcisEditrule);
+                        break;
+                    case "ITEM_REGISTRATION_CLASSFICATION":
+                        importTable.setItemRegistrationClassification(Integer.parseInt(tcisEditrule));
+                        break;
+                    case "SPICE_MODEL":
+                        importTable.setSpiceModel(tcisEditrule);
+                        break;
+                    case "PARTS_NAME":
+                        importTable.setPartsName(tcisEditrule);
+                        break;
+                    case "PART_TYPE": {}
+                    case "TOLERANCE":
+                        importTable.setTolerance(tcisEditrule);
+                        break;
+                    case "RATING_VOLTAGE":
+                        importTable.setRatingVoltage(tcisEditrule);
+                        break;
+                    case "CHARACTERISTICS":
+                        importTable.setCharacteristics(tcisEditrule);
+                        break;
+                    case "RATING_ELECTRICITY":
+                        importTable.setRatingElectricity(tcisEditrule);
+                        break;
+                    case "PACKAGE_TYPE":
+                        importTable.setPcbFootPrint(tcisEditrule); // 仅在无pcb时调用
+                        break;
+                }
             }
         }
     }

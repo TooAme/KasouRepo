@@ -137,10 +137,13 @@ describe('Service Tests', () => {
 
       it('should partial update a ImportHistory', async () => {
         const patchObject = {
+          uuid: 'BBBBBB',
+          tcihFilename: 'BBBBBB',
+          tcihImporttime: dayjs(currentDate).format(DATE_TIME_FORMAT),
           tcihStatus: true,
           createBy: 'BBBBBB',
-          createTime: dayjs(currentDate).format(DATE_TIME_FORMAT),
           updateBy: 'BBBBBB',
+          delFlag: true,
           remark: 'BBBBBB',
           ...new ImportHistory(),
         };

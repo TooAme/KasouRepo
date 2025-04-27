@@ -11,7 +11,8 @@
         "importHistory": "Import History",
         "importHistoryDetail": "Import History Detail",
         "importTable": "Import Table",
-        "ssImport": "SS Import"
+        "ssImport": "SS Import",
+        "importSetting": "Import Setting"
       },
       "account": {
         "main": "アカウント",

@@ -294,11 +294,9 @@ public class ImportUploadErrorResource {
             //            }
             //System.out.println("lineNum:" + lineNum);
             for (int i = 10; i < sheet.getLastRowNum() + 1; i++) { // 从第11行開始遍历
-                System.out.println(i + " " + sheet.getLastRowNum());
+                System.out.println("ラインを読み込む中:　" + i + " 総ライン数: " + sheet.getLastRowNum());
                 Row row = sheet.getRow(i);
-                if (
-                    isRowEmpty(row)
-                ) break; // 解决getLastRow方法不准确问题
+                if (isRowEmpty(row)) break; // 解决getLastRow方法不准确问题
 
                 Cell cellN = row.getCell(13); // N列は索引13
                 if (

@@ -17,6 +17,10 @@ const SSImport = () => import('@/entities/ss-import/ss-import.vue');
 const SSImportUpdate = () => import('@/entities/ss-import/ss-import-update.vue');
 const SSImportDetails = () => import('@/entities/ss-import/ss-import-details.vue');
 
+const ImportSetting = () => import('@/entities/import-setting/import-setting.vue');
+const ImportSettingUpdate = () => import('@/entities/import-setting/import-setting-update.vue');
+const ImportSettingDetails = () => import('@/entities/import-setting/import-setting-details.vue');
+
 // jhipster-needle-add-entity-to-router-import - JHipster will import entities to the router here
 
 export default {
@@ -117,6 +121,30 @@ export default {
       path: 'ss-import/:sSImportId/view',
       name: 'SSImportView',
       component: SSImportDetails,
+      meta: { authorities: [Authority.USER] },
+    },
+    {
+      path: 'import-setting',
+      name: 'ImportSetting',
+      component: ImportSetting,
+      meta: { authorities: [Authority.USER] },
+    },
+    {
+      path: 'import-setting/new',
+      name: 'ImportSettingCreate',
+      component: ImportSettingUpdate,
+      meta: { authorities: [Authority.USER] },
+    },
+    {
+      path: 'import-setting/:importSettingId/edit',
+      name: 'ImportSettingEdit',
+      component: ImportSettingUpdate,
+      meta: { authorities: [Authority.USER] },
+    },
+    {
+      path: 'import-setting/:importSettingId/view',
+      name: 'ImportSettingView',
+      component: ImportSettingDetails,
       meta: { authorities: [Authority.USER] },
     },
     // jhipster-needle-add-entity-to-router - JHipster will add entities to the router here
