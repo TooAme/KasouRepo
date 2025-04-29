@@ -88,15 +88,29 @@ public class ImportProcessResource {
                 }
             }
         }
+
+        // 获取所有 partNumber 为 "-" 的 ImportTable 数据
+        List<ImportTable> importTablesToDelete = importTableRepository.findByPartNumber("-");
+
+        // 删除这些数据
+        for (ImportTable importTable : importTablesToDelete) {
+            importTableService.delete(importTable.getId());
+        }
+
+        System.out.println("partNumber が '-' の ImportTable データが削除されました。");
+
         // 排序，先处理非ss
         for (File file : normalFile) {
             //System.out.println("Processing normalFile");
             processNormalFile(file);
+
+            updateSSInTable();
         }
         for (File file : ssListFile) {
             //System.out.println("Processing ssListFile");
-            sSImportRepository.deleteAll();
             processSsListFile(file);
+
+            updateSSInTable();
         }
     }
 
@@ -134,11 +148,12 @@ public class ImportProcessResource {
                 // 检查数据是否存在
                 Optional<ImportTable> existingTable = importTableRepository.findByBCode(bcode);
                 ImportTable importTable;
-                if (
-                    existingTable.isPresent()
-                ) { // 检验是否为ss部品，是则跳过//TODO:修改逻辑位置
-                    if (existingTable.get().getPartNumber().equals("-")) continue;
-                }
+                //                if (
+                //                    existingTable.isPresent()
+                //                ) { // 检验是否为ss部品，是则跳过//TODO:修改逻辑位置
+                //                    if (existingTable.get().getPartNumber().equals("-"))
+                //                        continue;
+                //                }
                 if (existingTable.isPresent()) {
                     // 如果数据已存在，更新该条记录
                     importTable = existingTable.get();
@@ -147,9 +162,7 @@ public class ImportProcessResource {
                     importTable.setUpdateTime(Instant.now());
 
                     //                    System.out.println(getCellValue(row.getCell(13)) + "!!!!!!!!!!!!!!!!!!!");
-                    if (
-                        getCellValue(row.getCell(13)).equals("SS")
-                    ) { // SS处理
+                    if (getCellValue(row.getCell(13)).equals("SS")) { // SS处理
                         String ssSubBCode = getCellValue(row.getCell(28));
                         Optional<SSImport> existingSSImport = sSImportRepository.findBySsSubBCode(ssSubBCode);
                         SSImport ssImport;
@@ -225,6 +238,7 @@ public class ImportProcessResource {
                     setTableCharacter(importTable, row, "COMMON", "B_CODE");
                     setTableCharacter(importTable, row, "COMMON", "ITEM_REGISTRATION_CLASSFICATION");
                     setTableCharacter(importTable, row, "COMMON", "SPICE_MODEL");
+                    setTableCharacter(importTable, row, "COMMON", "DEL");
                     setTableCharacter(importTable, row, mattanName, "VALUE");
                     setTableCharacter(importTable, row, mattanName, "CHARACTERISTICS");
                     setTableCharacter(importTable, row, mattanName, "TOLERANCE");
@@ -603,6 +617,7 @@ public class ImportProcessResource {
 
     private void processSsListFile(File file) {
         System.out.println("SSリストファイル処理中:" + file.getName());
+        sSImportRepository.deleteAll();
         // ss清单文件处理
         try (FileInputStream fis = new FileInputStream(file)) {
             Workbook ssworkbook = new XSSFWorkbook(fis);
@@ -614,35 +629,87 @@ public class ImportProcessResource {
                 if (row == null) {
                     continue; // 跳过空行
                 }
-                if (!getCellValue(row.getCell(1)).isEmpty()) {
-                    String ssSubBCode = getCellValue(row.getCell(1));
-                    Optional<ImportTable> targetTable = importTableRepository.findByBCode(ssSubBCode);
-                    SSImport ssImport;
-                    if (targetTable.isPresent()) {
-                        ssImport = new SSImport();
+                if (
+                    !getCellValue(row.getCell(0)).isEmpty()
+                ) { // 亲部品
+                    //找他右下角的代表部品，没有则不添加
+                    if (
+                        getCellValue(sheetss.getRow(rowIndex + 1).getCell(1)).isEmpty() ||
+                        getCellValue(sheetss.getRow(rowIndex + 1).getCell(1)) == null
+                    ) {
+                        continue;
+                    } else {
+                        SSImport ssImport = new SSImport();
                         UUID uuid = UUID.randomUUID();
                         ssImport.setUuid(uuid);
-                        for (
-                            int j = 0;
-                            j < sheetss.getLastRowNum();
-                            j++
-                        ) if (sheetss.getRow(rowIndex - j).getCell(0) != null && rowIndex - j > 2) { // 向上寻找亲部品管理番号
-                            ssImport.setSsBCode(getCellValue(sheetss.getRow(rowIndex - j).getCell(0)));
-                            break;
-                        }
-                        ssImport.setSsSubBCode(targetTable.get().getbCode());
+                        ssImport.setSsBCode(getCellValue(row.getCell(0)));
+                        ssImport.setSsSubBCode(getCellValue(sheetss.getRow(rowIndex + 1).getCell(1)));
+                        //                        Optional<ImportTable> targetTable = importTableRepository.findByBCode(getCellValue(sheetss.getRow(rowIndex + 1).getCell(1)));
+                        //                        // 根据代表部品bcode找到代表部品数据
                         ssImport.setSsCreateBy(System.getProperty("user.name"));
-                        ssImport.setSsFilename(targetTable.get().getPartType()); //写的是文件名，但是获取不到
-                        ssImport.setCreateBy(targetTable.get().getCreateBy());
-                        ssImport.setCreateTime(targetTable.get().getCreateTime());
+                        ssImport.setSsFilename(getCellValue(row.getCell(2))); //写的是文件名，但是获取不到
+                        ssImport.setCreateBy(System.getProperty("user.name"));
+                        ssImport.setCreateTime(Instant.now());
                         ssImport.setUpdateBy(System.getProperty("user.name"));
                         ssImport.setUpdateTime(Instant.now());
                         ssImport.setDelFlag(true);
-                        System.out.println("SS新規作成中: " + ssSubBCode);
+                        System.out.println("SS親部品新規作成中: " + getCellValue(row.getCell(0)));
                         sSImportService.save(ssImport);
-                        targetTable.get().setPartNumber("-");
-                        importTableRepository.save(targetTable.get());
                     }
+                }
+                if (
+                    !getCellValue(row.getCell(1)).isEmpty()
+                ) { // 子部品
+                    SSImport ssImport = new SSImport();
+                    UUID uuid = UUID.randomUUID();
+                    ssImport.setUuid(uuid);
+                    for (int j = 0; j < sheetss.getLastRowNum(); j++) if (
+                        sheetss.getRow(rowIndex - j).getCell(0) != null && rowIndex - j > 2
+                    ) { // 向上寻找亲部品管理番号
+                        ssImport.setSsBCode(getCellValue(sheetss.getRow(rowIndex - j).getCell(0)));
+                        break;
+                    }
+                    ssImport.setSsSubBCode(getCellValue(row.getCell(1)));
+                    //                        Optional<ImportTable> targetTable = importTableRepository.findByBCode(getCellValue(sheetss.getRow(rowIndex + 1).getCell(1)));
+                    //                        // 根据代表部品bcode找到代表部品数据
+                    ssImport.setSsCreateBy(System.getProperty("user.name"));
+                    ssImport.setSsFilename(getCellValue(row.getCell(2))); //写的是文件名，但是获取不到
+                    ssImport.setCreateBy(System.getProperty("user.name"));
+                    ssImport.setCreateTime(Instant.now());
+                    ssImport.setUpdateBy(System.getProperty("user.name"));
+                    ssImport.setUpdateTime(Instant.now());
+                    ssImport.setDelFlag(true);
+                    System.out.println("SS子部品新規作成中: " + getCellValue(row.getCell(1)));
+                    sSImportService.save(ssImport);
+                    //                    String ssSubBCode = getCellValue(row.getCell(1));
+                    //                    Optional<ImportTable> targetTable = importTableRepository.findByBCode(ssSubBCode);
+                    //                    SSImport ssImport;
+                    //                    if (targetTable.isPresent()) {
+                    //                        ssImport = new SSImport();
+                    //                        UUID uuid = UUID.randomUUID();
+                    //                        ssImport.setUuid(uuid);
+                    //                        for (
+                    //                            int j = 0;
+                    //                            j < sheetss.getLastRowNum();
+                    //                            j++
+                    //                        )
+                    //                            if (sheetss.getRow(rowIndex - j).getCell(0) != null && rowIndex - j > 2) { // 向上寻找亲部品管理番号
+                    //                                ssImport.setSsBCode(getCellValue(sheetss.getRow(rowIndex - j).getCell(0)));
+                    //                                break;
+                    //                            }
+                    //                        ssImport.setSsSubBCode(targetTable.get().getbCode());
+                    //                        ssImport.setSsCreateBy(System.getProperty("user.name"));
+                    //                        ssImport.setSsFilename(targetTable.get().getPartType()); //写的是文件名，但是获取不到
+                    //                        ssImport.setCreateBy(targetTable.get().getCreateBy());
+                    //                        ssImport.setCreateTime(targetTable.get().getCreateTime());
+                    //                        ssImport.setUpdateBy(System.getProperty("user.name"));
+                    //                        ssImport.setUpdateTime(Instant.now());
+                    //                        ssImport.setDelFlag(true);
+                    //                        System.out.println("SS新規作成中: " + ssSubBCode);
+                    //                        sSImportService.save(ssImport);
+                    //                        targetTable.get().setPartNumber("-");
+                    //                        importTableRepository.save(targetTable.get());
+                    //                    }
                 }
             }
         } catch (IOException e) {
@@ -779,7 +846,15 @@ public class ImportProcessResource {
         if (setting.isPresent()) {
             String tcisIncol = setting.get().getTcisIncol();
             String tcisEditrule = setting.get().getTcisEditrule();
-            System.out.println("findin:" + setting.get().getId() + " tcisIncol:" + tcisIncol + ", tcisEditrule:" + tcisEditrule);
+            System.out.println(
+                settingCharacter2 +
+                "が見つかりました in " +
+                setting.get().getId() +
+                " tcisIncol:" +
+                tcisIncol +
+                ", tcisEditrule:" +
+                tcisEditrule
+            );
             // 动态值
             if ((tcisEditrule == null || tcisEditrule.isEmpty()) && (tcisIncol != null && !tcisIncol.isEmpty())) {
                 switch (settingCharacter2) {
@@ -946,20 +1021,89 @@ public class ImportProcessResource {
         // 处理多个数字字符串的情况
         StringBuilder result = new StringBuilder();
         String[] indices = columnIndices.split(",");
+        List<String> values = new ArrayList<>();
+
         for (String index : indices) {
             try {
                 int cellIndex = Integer.parseInt(index.trim());
                 Cell cell = row.getCell(cellIndex);
                 if (cell != null) {
-                    result.append(cell.toString()).append(" ");
+                    String cellValue = cell.toString();
+                    // 新增逻辑：如果字符串以 ".0" 结尾，替换为 ""
+                    if (cellValue.endsWith(".0")) {
+                        cellValue = cellValue.replace(".0", "");
+                    }
+                    values.add(cellValue);
                 }
             } catch (NumberFormatException e) {
                 // 忽略无效的索引
             }
         }
 
+        // 新增逻辑：当有四个字符串时，返回特定格式
+        if (values.size() == 4) {
+            return values.get(0) + "-" + values.get(2) + values.get(3);
+        }
+
         // 去掉末尾多余的空格
-        return result.toString().trim();
+        return String.join("", values).trim();
+    }
+
+    public void updateSSInTable() {
+        // 在ssImport数据库中找到所有ssSubBCode与自身下一条数据的ssSubBCode相等的数据
+        // 如果该数据的ssSubBCode与某一条importTable数据库中数据的bCode字段相等，则执行：
+        // 生成一条新的importTable数据，这条数据的bCode字段为ssImport那条数据的ssBCode
+        // 其它均与找到的importTable数据相同
+        // 在 ssImport 数据库中找到所有 ssSubBCode 与自身下一条数据的 ssSubBCode 相等的数据
+        System.out.println("updateSSInTable>>>>>>");
+        List<SSImport> ssImports = sSImportRepository.findAll();
+        Map<String, List<SSImport>> ssSubBCodeMap = new HashMap<>();
+
+        for (int i = 0; i < ssImports.size() - 1; i++) {
+            SSImport current = ssImports.get(i);
+            SSImport next = ssImports.get(i + 1);
+
+            if (current.getSsSubBCode() != null && current.getSsSubBCode().equals(next.getSsSubBCode())) {
+                ssSubBCodeMap.computeIfAbsent(current.getSsSubBCode(), k -> new ArrayList<>()).add(current);
+            }
+        }
+
+        // 检查这些编号是否存在于 ImportTable 数据库中
+        List<String> ssSubBCodeList = new ArrayList<>(ssSubBCodeMap.keySet());
+        List<ImportTable> matchingImportTables = importTableRepository.findByBCodeIn(ssSubBCodeList);
+
+        // 如果存在对应的管理编号，则执行以下逻辑
+        for (ImportTable importTable : matchingImportTables) {
+            String ssSubBCode = importTable.getbCode();
+            List<SSImport> ssImportsWithMatchingSubBCode = ssSubBCodeMap.get(ssSubBCode);
+
+            for (SSImport ssImport : ssImportsWithMatchingSubBCode) {
+                // 生成一条新的 importTable 数据，这条数据的 bCode 字段为 ssImport 那条数据的 ssBCode，其他均与找到的 importTable 数据相同
+                ImportTable newImportTable = new ImportTable();
+                newImportTable.setUuid(UUID.randomUUID());
+                newImportTable.setbCode(ssImport.getSsBCode());
+                newImportTable.setPartNumber("-");
+                newImportTable.setManufacture(importTable.getManufacture());
+                newImportTable.setCreateBy(importTable.getCreateBy());
+                newImportTable.setCreateTime(importTable.getCreateTime());
+                newImportTable.setUpdateBy(System.getProperty("user.name"));
+                newImportTable.setUpdateTime(Instant.now());
+                newImportTable.setDelFlag(importTable.getDelFlag());
+                newImportTable.setItemRegistrationClassification(importTable.getItemRegistrationClassification());
+                newImportTable.setSpiceModel(importTable.getSpiceModel());
+                newImportTable.setValue(importTable.getValue());
+                newImportTable.setPartType(importTable.getPartType());
+                newImportTable.setTolerance(importTable.getTolerance());
+                newImportTable.setRatingVoltage(importTable.getRatingVoltage());
+                newImportTable.setCharacteristics(importTable.getCharacteristics());
+                newImportTable.setRatingElectricity(importTable.getRatingElectricity());
+                newImportTable.setSchematicPart(importTable.getSchematicPart());
+                newImportTable.setPcbFootPrint(importTable.getPcbFootPrint());
+                newImportTable.setPartsName(importTable.getPartsName());
+
+                importTableService.save(newImportTable);
+                System.out.println("新しい SS データがインポートテーブルに作成されました: " + newImportTable.getbCode());
+            }
+        }
     }
 }
-//TODO:重新生成实体，单位改变

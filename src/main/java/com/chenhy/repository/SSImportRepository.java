@@ -1,6 +1,7 @@
 package com.chenhy.repository;
 
 import com.chenhy.domain.SSImport;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.stereotype.Repository;
@@ -12,4 +13,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface SSImportRepository extends JpaRepository<SSImport, Long> {
     Optional<SSImport> findBySsSubBCode(String ssSubBCode);
+
+    List<SSImport> findAll();
 }

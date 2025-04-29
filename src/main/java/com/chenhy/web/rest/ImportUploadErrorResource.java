@@ -2,6 +2,7 @@ package com.chenhy.web.rest;
 
 import com.chenhy.domain.ImportHistory;
 import com.chenhy.domain.ImportHistoryDetail;
+import com.chenhy.repository.ImportTableRepository;
 import com.chenhy.service.ImportHistoryDetailService;
 import com.chenhy.service.ImportHistoryService;
 import io.micrometer.common.util.StringUtils;
@@ -36,6 +37,7 @@ public class ImportUploadErrorResource {
     private final ImportHistoryService importHistoryService;
     private final ImportHistoryDetailService importHistoryDetailService;
     private final ImportProcessResource importProcessResource;
+    private final ImportTableRepository importTableRepository;
 
     private final String uploadDirectory = "file";
 
@@ -43,11 +45,13 @@ public class ImportUploadErrorResource {
     public ImportUploadErrorResource(
         ImportHistoryService importHistoryService,
         ImportHistoryDetailService importHistoryDetailService,
-        ImportProcessResource importProcessResource
+        ImportProcessResource importProcessResource,
+        ImportTableRepository importTableRepository
     ) {
         this.importHistoryService = importHistoryService;
         this.importHistoryDetailService = importHistoryDetailService;
         this.importProcessResource = importProcessResource;
+        this.importTableRepository = importTableRepository;
 
         // 创建上传目录
         File directory = new File(uploadDirectory);
@@ -133,8 +137,10 @@ public class ImportUploadErrorResource {
                 detail.setDelFlag(false);
                 importHistoryDetailService.save(detail);
 
-                // 删除上传的ファイル
-                Files.deleteIfExists(targetLocation);
+                if (validationResult.isSsListFlag()) {
+                    importProcessResource.updateSSInTable();
+                    importProcessResource.processAllFiles(targetLocation);
+                } else Files.deleteIfExists(targetLocation); // 删除上传的ファイル
             } else {
                 importProcessResource.processAllFiles(targetLocation);
             }
@@ -177,6 +183,12 @@ public class ImportUploadErrorResource {
             errorLine.append(line);
         }
 
+        void clearError() {
+            this.hasError = false;
+            this.errorMessage.setLength(0);
+            this.errorLine.setLength(0);
+        }
+
         String getErrorMessage() {
             return errorMessage.toString();
         }
@@ -194,7 +206,7 @@ public class ImportUploadErrorResource {
         try (FileInputStream fis = new FileInputStream(filePath); Workbook workbook = new XSSFWorkbook(fis)) {
             FileValidationResult result = new FileValidationResult();
 
-            result.ss_list_flag = true;
+            result.ss_list_flag = false;
             // 判断表是否存在
             if (workbook.getNumberOfSheets() < 1) {
                 result.addError("ERR001_ファイルが存在しません。", "N/A");
@@ -214,6 +226,44 @@ public class ImportUploadErrorResource {
                     //result.addError("ERR002_ファイルフォーマットが不正です。", "A2");
                 } else if (cellA2.toString().equals("管理番号（SS親部品）")) {
                     result.ss_list_flag = true;
+                    result.clearError();
+                    for (int i = 2; i < sheet1.getLastRowNum() + 1; i++) { // 从第3行開始遍历
+                        //System.out.println("ラインを読み込む中:　" + i + " 総ライン数: " + sheet1.getLastRowNum());
+                        Row row = sheet1.getRow(i);
+                        if (isRowEmpty(row)) break;
+                        if (
+                            row != null &&
+                            row.getCell(0) != null &&
+                            row.getCell(1) == null &&
+                            sheet1.getRow(i + 1) != null &&
+                            sheet1.getRow(i + 1).getCell(1) != null
+                        ) {
+                            Cell cell0 = row.getCell(0);
+                            Row nextRow = sheet1.getRow(i + 1);
+                            Cell nextCell1 = nextRow.getCell(1);
+                            if (
+                                cell0 != null && !getCellValue(cell0).isEmpty() && nextCell1 != null && !getCellValue(nextCell1).isEmpty()
+                            ) {
+                                if (nextRow != null) {
+                                    if (nextCell1 != null && !getCellValue(nextCell1).isEmpty()) {
+                                        if (importTableRepository.findByBCode(getCellValue(nextCell1)).isEmpty()) {
+                                            if (
+                                                result.errorMessage.length() < 4800 && result.errorLine.length() < 240
+                                            ) result.addError( // 超长截断
+                                                "ERR009_SS子部品の管理番号(" + getCellValue(nextCell1) + ")が存在しません。",
+                                                String.valueOf(i + 1)
+                                            );
+                                            //                                            if(result.errorMessage.length() > 4800 ||  result.errorLine.length() > 240)
+                                            //                                            {
+                                            //                                                result.addError("...", "...");
+                                            //                                                break;
+                                            //                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 //}
                 return result;
@@ -294,7 +344,7 @@ public class ImportUploadErrorResource {
             //            }
             //System.out.println("lineNum:" + lineNum);
             for (int i = 10; i < sheet.getLastRowNum() + 1; i++) { // 从第11行開始遍历
-                System.out.println("ラインを読み込む中:　" + i + " 総ライン数: " + sheet.getLastRowNum());
+                //System.out.println("ラインを読み込む中:　" + i + " 総ライン数: " + sheet.getLastRowNum());
                 Row row = sheet.getRow(i);
                 if (isRowEmpty(row)) break; // 解决getLastRow方法不准确问题
 
@@ -342,10 +392,26 @@ public class ImportUploadErrorResource {
         }
         return false;
     }
+
     /**
      * 生成唯一的ファイルコード
      */
     //    private String generateFileCode() {
     //        return
     //    }
+    private String getCellValue(Cell cell) {
+        if (cell == null) {
+            return "";
+        }
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                return String.valueOf(cell.getNumericCellValue());
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            default:
+                return "";
+        }
+    }
 }
