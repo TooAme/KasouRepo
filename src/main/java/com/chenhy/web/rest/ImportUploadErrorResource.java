@@ -60,12 +60,6 @@ public class ImportUploadErrorResource {
         }
     }
 
-    /**
-     * POST /import/upload : Upload a file for import.
-     *
-     * @param file the file to upload
-     * @return the ResponseEntity with status 200 (OK) and the result in body
-     */
     @PostMapping("/import/upload")
     public ResponseEntity<Map<String, Object>> uploadFile(@RequestParam("file") MultipartFile file) {
         log.debug("REST request to upload file : {}", file.getOriginalFilename());
@@ -77,8 +71,7 @@ public class ImportUploadErrorResource {
             response.put("message", "アップロードするファイルを一つ選びます");
             return ResponseEntity.badRequest().body(response);
         }
-
-        // 验证ファイルタイプ
+        // 验证文件类型
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || (!originalFilename.endsWith(".xlsx"))) {
             response.put("success", false);
@@ -87,7 +80,7 @@ public class ImportUploadErrorResource {
         }
 
         try {
-            // 生成唯一的コード和UUID
+            // 从文件名前6位获取code，生成唯一的UUID
             String delimiter = "_";
             String code = originalFilename.split(delimiter)[0];
             if (code.length() != 6) {
@@ -95,22 +88,19 @@ public class ImportUploadErrorResource {
             }
             UUID uuid = UUID.randomUUID();
 
-            // 保存ファイル
+            // 保存文件
             String savedFileName = originalFilename;
             Path targetLocation = Paths.get(uploadDirectory).resolve(savedFileName);
 
-            // 如果目标路径已存在同名ファイル，则删除它
+            // 如果目标路径已存在同名文件，则删除它
             if (Files.exists(targetLocation)) {
                 Files.delete(targetLocation);
                 log.info("Deleted existing file: {}", targetLocation);
             }
-
             Files.copy(file.getInputStream(), targetLocation);
-
-            // 检查ファイル内容
+            // 检查文件内容
             FileValidationResult validationResult = validateExcelFile(targetLocation.toString());
-
-            // 创建导入历史记录
+            // 创建importHistory记录
             ImportHistory importHistory = new ImportHistory();
             importHistory.setUuid(uuid);
             importHistory.setTcihCode(code);
@@ -120,11 +110,9 @@ public class ImportUploadErrorResource {
             importHistory.setCreateBy(System.getProperty("user.name"));
             importHistory.setCreateTime(Instant.now());
             importHistory.setDelFlag(true);
-
             // 保存记录
             ImportHistory savedHistory = importHistoryService.save(importHistory);
-
-            // 如果有错误，创建错误详情记录
+            // 如果有错误，创建importHistoryDetail记录
             if (validationResult.hasError) {
                 ImportHistoryDetail detail = new ImportHistoryDetail();
                 detail.setTcihdPid(String.valueOf(uuid));
@@ -138,14 +126,13 @@ public class ImportUploadErrorResource {
                 importHistoryDetailService.save(detail);
 
                 if (validationResult.isSsListFlag()) {
-                    importProcessResource.updateSSInTable();
+                    importProcessResource.injectSSIntoImportTable();
                     importProcessResource.processAllFiles(targetLocation);
-                } else Files.deleteIfExists(targetLocation); // 删除上传的ファイル
+                } else Files.deleteIfExists(targetLocation); // 物理删除上传的文件
             } else {
                 importProcessResource.processAllFiles(targetLocation);
             }
 
-            // 构建レスポンス
             response.put("success", true);
             response.put("message", validationResult.hasError ? "ファイル検証に失敗しました" : "ファイル検証に成功しました");
             response.put("data", savedHistory);
@@ -175,7 +162,7 @@ public class ImportUploadErrorResource {
 
         void addError(String message, String line) {
             this.hasError = true;
-            if (errorMessage.length() > 0) {
+            if (!errorMessage.isEmpty()) {
                 errorMessage.append(",");
                 errorLine.append(",");
             }
@@ -213,17 +200,13 @@ public class ImportUploadErrorResource {
                 return result;
             }
             if (workbook.getNumberOfSheets() < 2) {
-                // 如果只有一张表，检查第一个sheetのA2单元格是否为管理番号（SS報部品）
+                // 如果只有一张表，检查表一的A2单元格是否为管理番号（SS報部品）
                 Sheet sheet1 = workbook.getSheetAt(0);
                 Row row1 = sheet1.getRow(1);
-                //                if (row1 == null) {
-                //                    result.addError("ERR002_ファイルフォーマットが不正です。", "A2");
-                //                } else {
                 Cell cellA2 = row1.getCell(0);
                 //System.out.println(cellA2.toString());
                 if (cellA2 == null || !cellA2.toString().equals("管理番号（SS親部品）")) {
                     result.addError("ERR002_ファイルフォーマットが不正です。", "2");
-                    //result.addError("ERR002_ファイルフォーマットが不正です。", "A2");
                 } else if (cellA2.toString().equals("管理番号（SS親部品）")) {
                     result.ss_list_flag = true;
                     result.clearError();
@@ -247,17 +230,11 @@ public class ImportUploadErrorResource {
                                 if (nextRow != null) {
                                     if (nextCell1 != null && !getCellValue(nextCell1).isEmpty()) {
                                         if (importTableRepository.findByBCode(getCellValue(nextCell1)).isEmpty()) {
-                                            if (
-                                                result.errorMessage.length() < 4800 && result.errorLine.length() < 240
-                                            ) result.addError( // 超长截断
+                                            if (result.errorMessage.length() < 4800 && result.errorLine.length() < 240) result.addError(
+                                                // 错误信息超长截断
                                                 "ERR009_SS子部品の管理番号(" + getCellValue(nextCell1) + ")が存在しません。",
                                                 String.valueOf(i + 1)
                                             );
-                                            //                                            if(result.errorMessage.length() > 4800 ||  result.errorLine.length() > 240)
-                                            //                                            {
-                                            //                                                result.addError("...", "...");
-                                            //                                                break;
-                                            //                                            }
                                         }
                                     }
                                 }
@@ -265,90 +242,53 @@ public class ImportUploadErrorResource {
                         }
                     }
                 }
-                //}
                 return result;
             }
 
-            // 检查第二个sheetのJ3单元格是否为空
-            Sheet sheet = workbook.getSheetAt(1); // 获取第二个sheet
+            // 检查表二的J3单元格是否为空
+            Sheet sheet = workbook.getSheetAt(1);
             Row row3 = sheet.getRow(2);
             if (row3 != null) {
-                Cell cellJ3 = row3.getCell(9); // J列は索引9
+                Cell cellJ3 = row3.getCell(9); // J列
                 if (cellJ3 == null || cellJ3.toString().trim().isEmpty()) {
                     result.addError("ERR003_インポートファイルの末端分類コードが空白です。", "3");
-                    //result.addError("ERR003_インポートファイルの末端分類コードが空白です。", "J3");
                 }
             } else {
                 result.addError("ERR003_インポートファイルの末端分類コードが空白です。", "3");
-                //result.addError("ERR003_インポートファイルの末端分類コードが空白です。", "J3");
             }
-
-            // 检查第二个sheetのL3单元格是否为空
+            // 检查表二的L3单元格是否为空
             if (row3 != null) {
-                Cell cellL3 = row3.getCell(11); // L列は索引11
+                Cell cellL3 = row3.getCell(11); // L列
                 if (cellL3 == null || cellL3.toString().trim().isEmpty()) {
                     result.addError("ERR004_インポートファイルの末端分類名称が空白です。", "3");
-                    //result.addError("ERR004_インポートファイルの末端分類名称が空白です。", "L3");
                 }
             } else {
                 result.addError("ERR004_インポートファイルの末端分類名称が空白です。", "3");
-                //result.addError("ERR004_インポートファイルの末端分類名称が空白です。", "L3");
             }
-
-            // 检查第二个sheetのE3单元格是否存在于导入对象表中
+            // 检查表二的E3单元格是否存在于导入对象表中
             if (row3 != null) {
-                Cell cellE3 = row3.getCell(4); // E列は索引4
+                Cell cellE3 = row3.getCell(4); // E列
                 if (cellE3 == null || cellE3.toString().trim().isEmpty()) {
                     result.addError("ERR010_インポートファイルの大分類はインポート対象外です。", "3");
-                    //result.addError("ERR010_インポートファイルの大分類はインポート対象外です。", "E3");
                 }
             } else {
                 result.addError("ERR010_インポートファイルの大分類はインポート対象外です。", "3");
-                //result.addError("ERR010_インポートファイルの大分類はインポート対象外です。", "E3");
             }
-
-            // 检查第二个sheetのL3单元格是否在导入設定表中定義了Parts Name
+            // 检查表二的L3单元格是否在导入設定表中定義了Parts Name
             if (row3 != null) {
-                Cell cellL3 = row3.getCell(11); // L列は索引11
+                Cell cellL3 = row3.getCell(11); // L列
                 if (cellL3 == null || cellL3.toString().trim().isEmpty()) {
                     result.addError("ERR011_インポートファイルはインポート対象外です。", "3");
                 }
-                // 未定義の場合：
-                // result.addError("ERR_011: シート2のセル(L3)により、インポート設定テーブルにParts Nameが未定義です", "L3");
             } else {
                 result.addError("ERR011_インポートファイルはインポート対象外です。", "3");
-                //result.addError("ERR011_インポートファイルはインポート対象外です。", "L3");
             }
-
-            // 遍历行，找到最先各列都没有数据的一行
-            //            int lineNum = -1; // 初始化为-1，表示未找到
-            //            for (int i = 10; i < 1000; i++) { // 从第11行開始遍历
-            //                Row row = sheet.getRow(i);
-            //                if (row == null) {
-            //                    lineNum = i; // 行号从0開始計数
-            //                    break;
-            //                } else {
-            //                    boolean allCellsEmpty = true;
-            //                    for (int j = 0; j < row.getLastCellNum(); j++) { // 检查所有列
-            //                        Cell cell = row.getCell(j);
-            //                        if (cell != null && !cell.toString().trim().isEmpty()) {
-            //                            allCellsEmpty = false;
-            //                            break;
-            //                        }
-            //                    }
-            //                    if (allCellsEmpty) {
-            //                        lineNum = i; // 行号从0開始計数
-            //                        break;
-            //                    }
-            //                }
-            //            }
-            //System.out.println("lineNum:" + lineNum);
-            for (int i = 10; i < sheet.getLastRowNum() + 1; i++) { // 从第11行開始遍历
+            for (int i = 10; i < sheet.getLastRowNum() + 1; i++) { // 从第11行开始遍历
                 //System.out.println("ラインを読み込む中:　" + i + " 総ライン数: " + sheet.getLastRowNum());
                 Row row = sheet.getRow(i);
                 if (isRowEmpty(row)) break; // 解决getLastRow方法不准确问题
 
-                Cell cellN = row.getCell(13); // N列は索引13
+                Cell cellN = row.getCell(13); // N列
                 if (
                     cellN != null &&
                     !cellN.toString().trim().isEmpty() &&
@@ -367,13 +307,19 @@ public class ImportUploadErrorResource {
         }
     }
 
-    public static boolean isRowEmpty(Row row) { // 附判断excel空行的方法（整行都为空时，停止遍历取值）
+    /**
+     * 判断excel空行（整行都为空时，停止遍历取值）
+     *
+     * @param row excel行
+     * @return 是否为空
+     */
+    public static boolean isRowEmpty(Row row) {
         if (null == row) {
             return true;
         }
-        int firstCellNum = row.getFirstCellNum(); //第一个列位置
-        int lastCellNum = row.getLastCellNum(); //最后一列位置
-        int nullCellNum = 0; //空列数量
+        int firstCellNum = row.getFirstCellNum(); // 第一列位置
+        int lastCellNum = row.getLastCellNum(); // 最后一列位置
+        int nullCellNum = 0; // 空列数量
         for (int c = firstCellNum; c < lastCellNum; c++) {
             Cell cell = row.getCell(c);
             if (null == cell || cell.getCellType().equals(CellType.BLANK)) {
@@ -386,7 +332,7 @@ public class ImportUploadErrorResource {
                 nullCellNum++;
             }
         }
-        //所有列都为空
+        // 所有列都为空
         if (nullCellNum == (lastCellNum - firstCellNum)) {
             return true;
         }
@@ -394,24 +340,18 @@ public class ImportUploadErrorResource {
     }
 
     /**
-     * 生成唯一的ファイルコード
+     * 获取单元格字符串
+     *
+     * @param cell 单元格（cell格式）
+     * @return 单元格字符串（字符串）
      */
-    //    private String generateFileCode() {
-    //        return
-    //    }
     private String getCellValue(Cell cell) {
-        if (cell == null) {
-            return "";
-        }
-        switch (cell.getCellType()) {
-            case STRING:
-                return cell.getStringCellValue();
-            case NUMERIC:
-                return String.valueOf(cell.getNumericCellValue());
-            case BOOLEAN:
-                return String.valueOf(cell.getBooleanCellValue());
-            default:
-                return "";
-        }
+        if (cell == null) return "";
+        return switch (cell.getCellType()) {
+            case STRING -> cell.getStringCellValue().trim();
+            case NUMERIC -> String.valueOf(cell.getNumericCellValue());
+            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+            default -> "";
+        };
     }
 }
