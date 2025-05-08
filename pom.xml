@@ -22,6 +22,7 @@
             Build properties
             The spring-boot version should match the one managed by https://mvnrepository.com/artifact/tech.jhipster/jhipster-dependencies/${jhipster-dependencies.version}
         -->
+        <rocketmq.version>4.1.0-incubating</rocketmq.version>
         <maven.version>3.2.5</maven.version>
         <java.version>17</java.version>
         <node.version>v22.13.1</node.version>
@@ -790,6 +791,30 @@
                             <artifactId>liquibase-core</artifactId>
                             <version>${liquibase.version}</version>
                         </dependency>
+                      <!-- Spring Boot Starter for ActiveMQ -->
+                      <dependency>
+                        <groupId>org.apache.activemq</groupId>
+                        <artifactId>activemq-parent</artifactId>
+                        <type>pom</type>
+                      </dependency>
+
+                      <!-- rocketmq	-->
+		                  <!-- 如果配置线程池则加入 -->
+	                    <dependency>
+	                        <groupId>org.apache.activemq</groupId>
+                          <artifactId>activemq-pool</artifactId>
+                      </dependency>
+                      <!-- Apache Artemis Broker Client -->
+                      <dependency>
+                        <groupId>org.apache.activemq</groupId>
+                        <artifactId>artemis-jms-client</artifactId>
+                      </dependency>
+
+                      <!-- Redis -->
+                      <dependency>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-starter-data-redis</artifactId>
+                      </dependency>
                         <dependency>
                             <groupId>org.liquibase.ext</groupId>
                             <artifactId>liquibase-hibernate6</artifactId>

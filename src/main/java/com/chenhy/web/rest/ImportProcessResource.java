@@ -38,6 +38,7 @@ public class ImportProcessResource {
     private final SSImportRepository sSImportRepository;
     private final SSImportService sSImportService;
     private final Set<String> processedFiles = new HashSet<>();
+    public static final ThreadLocal<String> CURRENT_TABLE_NAME = new ThreadLocal<>();
     Logger log = LoggerFactory.getLogger(ImportProcessResource.class);
 
     @Autowired
@@ -128,13 +129,19 @@ public class ImportProcessResource {
 
         try (FileInputStream fis = new FileInputStream(file)) {
             Workbook workbook = new XSSFWorkbook(fis);
-            Sheet sheet = workbook.getSheetAt(1); // 获取第二个工作表
+            Sheet sheet = workbook.getSheetAt(1);
             Row characteristicRow = workbook.getSheetAt(1).getRow(2);
             String mattanName = getCellValue(sheet.getRow(2).getCell(11));
-            // 遍历第 11 行到最后一行的数据
-            for (int rowIndex = 10; rowIndex <= sheet.getLastRowNum(); rowIndex++) { // 第 11 行的索引为 10
+            String classifyName = getCellValueBeforeNewline(sheet.getRow(2).getCell(4)); // 从Excel获取表名（如"resistor_table"）
+
+            // 遍历数据行
+            for (int rowIndex = 10; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
-                if (row == null) continue; // 跳过空行
+                if (row == null) continue;
+
+                // 设置当前操作的表名（关键修改）
+                CURRENT_TABLE_NAME.set(classifyName);
+
                 if ("DEL".equals(getCellValue(row.getCell(13)))) {
                     sheet.removeRow(row); // 物理删除
                     String delBCode = getCellValue(row.getCell(28));
@@ -162,8 +169,8 @@ public class ImportProcessResource {
                     importTable = new ImportTable();
                     System.out.println("管理番号から新しいデータを作成中: " + bCode);
 
-                    UUID uuid = UUID.randomUUID();
-                    importTable.setUuid(uuid);
+                    String uuid = UUID.randomUUID().toString();
+                    importTable.setId(uuid);
                     importTable.setPartType(mattanName);
                     importTable.setCreateBy(getCurrentUsername());
                     importTable.setCreateTime(Instant.now());
@@ -250,6 +257,7 @@ public class ImportProcessResource {
                 }
                 // 保存或更新记录
                 importTableService.save(importTable);
+                CURRENT_TABLE_NAME.remove();
             }
         } catch (IOException e) {
             log.error(e.getMessage(), e);
@@ -334,6 +342,26 @@ public class ImportProcessResource {
             case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
             default -> "";
         };
+    }
+
+    /**
+     * 获取单元格字符串，并截取第一个换行符之前的内容
+     *
+     * @param cell 单元格（cell格式）
+     * @return 单元格字符串中换行符前的部分
+     */
+    private String getCellValueBeforeNewline(Cell cell) {
+        if (cell == null) return "";
+        String value =
+            switch (cell.getCellType()) {
+                case STRING -> cell.getStringCellValue();
+                case NUMERIC -> String.valueOf(cell.getNumericCellValue()).trim();
+                case BOOLEAN -> String.valueOf(cell.getBooleanCellValue()).trim();
+                default -> "";
+            };
+        // 提取换行符之前的内容
+        int newlineIndex = value.indexOf('\n');
+        return (newlineIndex != -1) ? value.substring(0, newlineIndex) : value;
     }
 
     /**
@@ -455,7 +483,7 @@ public class ImportProcessResource {
                         importTable.setbCode(getComplexCellValue(row, cvt(tcisIncol)));
                         break;
                     case "ITEM_REGISTRATION_CLASSFICATION":
-                        importTable.setItemRegistrationClassification(Integer.parseInt(getComplexCellValue(row, cvt(tcisIncol))));
+                        importTable.setItemRegistrationClassification(getComplexCellValue(row, cvt(tcisIncol)));
                         break;
                     case "SPICE_MODEL":
                         importTable.setSpiceModel(getComplexCellValue(row, cvt(tcisIncol)));
@@ -513,7 +541,7 @@ public class ImportProcessResource {
                         importTable.setValue(tcisEditrule);
                         break;
                     case "ITEM_REGISTRATION_CLASSFICATION":
-                        importTable.setItemRegistrationClassification(Integer.parseInt(tcisEditrule));
+                        importTable.setItemRegistrationClassification(tcisEditrule);
                         break;
                     case "SPICE_MODEL":
                         importTable.setSpiceModel(tcisEditrule);
@@ -648,7 +676,7 @@ public class ImportProcessResource {
             for (SSImport ssImport : ssImportsWithMatchingSubBCode) {
                 // 生成一条新的 importTable 数据，这条数据的 bCode 字段为 ssImport 数据的 ssBCode，其他均与找到的 importTable 数据相同
                 ImportTable newImportTable = new ImportTable();
-                newImportTable.setUuid(UUID.randomUUID());
+                newImportTable.setId(UUID.randomUUID().toString());
                 newImportTable.setbCode(ssImport.getSsBCode());
                 newImportTable.setPartNumber("-");
                 newImportTable.setManufacture(importTable.getManufacture());

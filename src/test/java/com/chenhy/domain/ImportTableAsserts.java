@@ -47,7 +47,7 @@ public class ImportTableAsserts {
     public static void assertImportTableUpdatableFieldsEquals(ImportTable expected, ImportTable actual) {
         assertThat(actual)
             .as("Verify ImportTable relevant properties")
-            .satisfies(a -> assertThat(a.getUuid()).as("check uuid").isEqualTo(expected.getUuid()))
+            .satisfies(a -> assertThat(a.getId()).as("check uuid").isEqualTo(expected.getId()))
             .satisfies(a -> assertThat(a.getPartNumber()).as("check partNumber").isEqualTo(expected.getPartNumber()))
             .satisfies(a -> assertThat(a.getPartType()).as("check partType").isEqualTo(expected.getPartType()))
             .satisfies(a -> assertThat(a.getValue()).as("check value").isEqualTo(expected.getValue()))

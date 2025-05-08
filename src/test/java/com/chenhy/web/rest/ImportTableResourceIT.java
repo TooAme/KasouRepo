@@ -36,8 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
 @WithMockUser
 class ImportTableResourceIT {
 
-    private static final UUID DEFAULT_UUID = UUID.randomUUID();
-    private static final UUID UPDATED_UUID = UUID.randomUUID();
+    private static final String DEFAULT_ID = UUID.randomUUID().toString();
+    private static final String UPDATED_ID = UUID.randomUUID().toString();
 
     private static final String DEFAULT_PART_NUMBER = "AAAAAAAAAA";
     private static final String UPDATED_PART_NUMBER = "BBBBBBBBBB";
@@ -72,8 +72,8 @@ class ImportTableResourceIT {
     private static final String DEFAULT_PARTS_NAME = "AAAAAAAAAA";
     private static final String UPDATED_PARTS_NAME = "BBBBBBBBBB";
 
-    private static final Integer DEFAULT_ITEM_REGISTRATION_CLASSIFICATION = 1;
-    private static final Integer UPDATED_ITEM_REGISTRATION_CLASSIFICATION = 2;
+    private static final String DEFAULT_ITEM_REGISTRATION_CLASSIFICATION = "3";
+    private static final String UPDATED_ITEM_REGISTRATION_CLASSIFICATION = "3";
 
     private static final String DEFAULT_SPICE_MODEL = "AAAAAAAAAA";
     private static final String UPDATED_SPICE_MODEL = "BBBBBBBBBB";
@@ -129,7 +129,7 @@ class ImportTableResourceIT {
      */
     public static ImportTable createEntity() {
         return new ImportTable()
-            .uuid(DEFAULT_UUID)
+            .id(DEFAULT_ID)
             .partNumber(DEFAULT_PART_NUMBER)
             .partType(DEFAULT_PART_TYPE)
             .value(DEFAULT_VALUE)
@@ -160,7 +160,7 @@ class ImportTableResourceIT {
      */
     public static ImportTable createUpdatedEntity() {
         return new ImportTable()
-            .uuid(UPDATED_UUID)
+            .id(UPDATED_ID)
             .partNumber(UPDATED_PART_NUMBER)
             .partType(UPDATED_PART_TYPE)
             .value(UPDATED_VALUE)
@@ -224,7 +224,7 @@ class ImportTableResourceIT {
     @Transactional
     void createImportTableWithExistingId() throws Exception {
         // Create the ImportTable with an existing ID
-        importTable.setId(1L);
+        importTable.setId(UUID.randomUUID().toString());
 
         long databaseSizeBeforeCreate = getRepositoryCount();
 
@@ -242,7 +242,7 @@ class ImportTableResourceIT {
     void checkUuidIsRequired() throws Exception {
         long databaseSizeBeforeTest = getRepositoryCount();
         // set the field null
-        importTable.setUuid(null);
+        importTable.setId(null);
 
         // Create the ImportTable, which fails.
 
@@ -280,8 +280,7 @@ class ImportTableResourceIT {
             .perform(get(ENTITY_API_URL + "?sort=id,desc"))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
-            .andExpect(jsonPath("$.[*].id").value(hasItem(importTable.getId().intValue())))
-            .andExpect(jsonPath("$.[*].uuid").value(hasItem(DEFAULT_UUID.toString())))
+            .andExpect(jsonPath("$.[*].id").value(hasItem(DEFAULT_ID.toString())))
             .andExpect(jsonPath("$.[*].partNumber").value(hasItem(DEFAULT_PART_NUMBER)))
             .andExpect(jsonPath("$.[*].partType").value(hasItem(DEFAULT_PART_TYPE)))
             .andExpect(jsonPath("$.[*].value").value(hasItem(DEFAULT_VALUE)))
@@ -315,8 +314,7 @@ class ImportTableResourceIT {
             .perform(get(ENTITY_API_URL_ID, importTable.getId()))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
-            .andExpect(jsonPath("$.id").value(importTable.getId().intValue()))
-            .andExpect(jsonPath("$.uuid").value(DEFAULT_UUID.toString()))
+            .andExpect(jsonPath("$.id").value(DEFAULT_ID.toString()))
             .andExpect(jsonPath("$.partNumber").value(DEFAULT_PART_NUMBER))
             .andExpect(jsonPath("$.partType").value(DEFAULT_PART_TYPE))
             .andExpect(jsonPath("$.value").value(DEFAULT_VALUE))
@@ -359,7 +357,7 @@ class ImportTableResourceIT {
         // Disconnect from session so that the updates on updatedImportTable are not directly saved in db
         em.detach(updatedImportTable);
         updatedImportTable
-            .uuid(UPDATED_UUID)
+            .id(UPDATED_ID)
             .partNumber(UPDATED_PART_NUMBER)
             .partType(UPDATED_PART_TYPE)
             .value(UPDATED_VALUE)
@@ -397,61 +395,6 @@ class ImportTableResourceIT {
 
     @Test
     @Transactional
-    void putNonExistingImportTable() throws Exception {
-        long databaseSizeBeforeUpdate = getRepositoryCount();
-        importTable.setId(longCount.incrementAndGet());
-
-        // If the entity doesn't have an ID, it will throw BadRequestAlertException
-        restImportTableMockMvc
-            .perform(
-                put(ENTITY_API_URL_ID, importTable.getId())
-                    .with(csrf())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(om.writeValueAsBytes(importTable))
-            )
-            .andExpect(status().isBadRequest());
-
-        // Validate the ImportTable in the database
-        assertSameRepositoryCount(databaseSizeBeforeUpdate);
-    }
-
-    @Test
-    @Transactional
-    void putWithIdMismatchImportTable() throws Exception {
-        long databaseSizeBeforeUpdate = getRepositoryCount();
-        importTable.setId(longCount.incrementAndGet());
-
-        // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        restImportTableMockMvc
-            .perform(
-                put(ENTITY_API_URL_ID, longCount.incrementAndGet())
-                    .with(csrf())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(om.writeValueAsBytes(importTable))
-            )
-            .andExpect(status().isBadRequest());
-
-        // Validate the ImportTable in the database
-        assertSameRepositoryCount(databaseSizeBeforeUpdate);
-    }
-
-    @Test
-    @Transactional
-    void putWithMissingIdPathParamImportTable() throws Exception {
-        long databaseSizeBeforeUpdate = getRepositoryCount();
-        importTable.setId(longCount.incrementAndGet());
-
-        // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        restImportTableMockMvc
-            .perform(put(ENTITY_API_URL).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(om.writeValueAsBytes(importTable)))
-            .andExpect(status().isMethodNotAllowed());
-
-        // Validate the ImportTable in the database
-        assertSameRepositoryCount(databaseSizeBeforeUpdate);
-    }
-
-    @Test
-    @Transactional
     void partialUpdateImportTableWithPatch() throws Exception {
         // Initialize the database
         insertedImportTable = importTableRepository.saveAndFlush(importTable);
@@ -463,7 +406,7 @@ class ImportTableResourceIT {
         partialUpdatedImportTable.setId(importTable.getId());
 
         partialUpdatedImportTable
-            .uuid(UPDATED_UUID)
+            .id(UPDATED_ID)
             .partNumber(UPDATED_PART_NUMBER)
             .partType(UPDATED_PART_TYPE)
             .value(UPDATED_VALUE)
@@ -505,7 +448,7 @@ class ImportTableResourceIT {
         partialUpdatedImportTable.setId(importTable.getId());
 
         partialUpdatedImportTable
-            .uuid(UPDATED_UUID)
+            .id(UPDATED_ID)
             .partNumber(UPDATED_PART_NUMBER)
             .partType(UPDATED_PART_TYPE)
             .value(UPDATED_VALUE)
@@ -540,63 +483,6 @@ class ImportTableResourceIT {
 
         assertSameRepositoryCount(databaseSizeBeforeUpdate);
         assertImportTableUpdatableFieldsEquals(partialUpdatedImportTable, getPersistedImportTable(partialUpdatedImportTable));
-    }
-
-    @Test
-    @Transactional
-    void patchNonExistingImportTable() throws Exception {
-        long databaseSizeBeforeUpdate = getRepositoryCount();
-        importTable.setId(longCount.incrementAndGet());
-
-        // If the entity doesn't have an ID, it will throw BadRequestAlertException
-        restImportTableMockMvc
-            .perform(
-                patch(ENTITY_API_URL_ID, importTable.getId())
-                    .with(csrf())
-                    .contentType("application/merge-patch+json")
-                    .content(om.writeValueAsBytes(importTable))
-            )
-            .andExpect(status().isBadRequest());
-
-        // Validate the ImportTable in the database
-        assertSameRepositoryCount(databaseSizeBeforeUpdate);
-    }
-
-    @Test
-    @Transactional
-    void patchWithIdMismatchImportTable() throws Exception {
-        long databaseSizeBeforeUpdate = getRepositoryCount();
-        importTable.setId(longCount.incrementAndGet());
-
-        // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        restImportTableMockMvc
-            .perform(
-                patch(ENTITY_API_URL_ID, longCount.incrementAndGet())
-                    .with(csrf())
-                    .contentType("application/merge-patch+json")
-                    .content(om.writeValueAsBytes(importTable))
-            )
-            .andExpect(status().isBadRequest());
-
-        // Validate the ImportTable in the database
-        assertSameRepositoryCount(databaseSizeBeforeUpdate);
-    }
-
-    @Test
-    @Transactional
-    void patchWithMissingIdPathParamImportTable() throws Exception {
-        long databaseSizeBeforeUpdate = getRepositoryCount();
-        importTable.setId(longCount.incrementAndGet());
-
-        // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        restImportTableMockMvc
-            .perform(
-                patch(ENTITY_API_URL).with(csrf()).contentType("application/merge-patch+json").content(om.writeValueAsBytes(importTable))
-            )
-            .andExpect(status().isMethodNotAllowed());
-
-        // Validate the ImportTable in the database
-        assertSameRepositoryCount(databaseSizeBeforeUpdate);
     }
 
     @Test

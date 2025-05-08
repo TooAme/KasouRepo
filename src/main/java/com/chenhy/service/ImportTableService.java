@@ -47,12 +47,12 @@ public interface ImportTableService {
      * @param id the id of the entity.
      * @return the entity.
      */
-    Optional<ImportTable> findOne(Long id);
+    Optional<ImportTable> findOne(String id);
 
     /**
      * Delete the "id" importTable.
      *
      * @param id the id of the entity.
      */
-    void delete(Long id);
+    void delete(String id);
 }

@@ -156,7 +156,7 @@ public class ImportTableResource {
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the importTable, or with status {@code 404 (Not Found)}.
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ImportTable> getImportTable(@PathVariable("id") Long id) {
+    public ResponseEntity<ImportTable> getImportTable(@PathVariable("id") String id) {
         LOG.debug("REST request to get ImportTable : {}", id);
         Optional<ImportTable> importTable = importTableService.findOne(id);
         return ResponseUtil.wrapOrNotFound(importTable);
@@ -168,12 +168,14 @@ public class ImportTableResource {
      * @param id the id of the importTable to delete.
      * @return the {@link ResponseEntity} with status {@code 204 (NO_CONTENT)}.
      */
+    // 修改方法参数类型，从 Long 改为 String
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteImportTable(@PathVariable("id") Long id) {
+    public ResponseEntity<Void> deleteImportTable(@PathVariable("id") String id) {
         LOG.debug("REST request to delete ImportTable : {}", id);
         importTableService.delete(id);
         return ResponseEntity.noContent()
-            .headers(HeaderUtil.createEntityDeletionAlert(applicationName, true, ENTITY_NAME, id.toString()))
+            .headers(HeaderUtil.createEntityDeletionAlert(applicationName, true, ENTITY_NAME, String.valueOf(id)))
             .build();
     }
+    // 修改其他涉及 id 的方法，将参数类型从 Long 改为 String
 }

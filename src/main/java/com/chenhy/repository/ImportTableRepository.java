@@ -4,7 +4,6 @@ import com.chenhy.domain.ImportTable;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.stereotype.Repository;
 
@@ -14,9 +13,11 @@ import org.springframework.stereotype.Repository;
 @SuppressWarnings("unused")
 @Repository
 public interface ImportTableRepository extends JpaRepository<ImportTable, Long> {
-    Long findByUuid(@NotNull UUID uuid);
+    Optional<ImportTable> findById(@NotNull String id);
 
     Optional<ImportTable> findByBCode(String bCode);
+
+    Optional<ImportTable> deleteById(String id);
 
     List<ImportTable> findByBCodeIn(List<String> ssSubBCodeList);
 

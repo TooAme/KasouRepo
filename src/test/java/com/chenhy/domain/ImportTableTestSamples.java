@@ -11,10 +11,11 @@ public class ImportTableTestSamples {
     private static final AtomicLong longCount = new AtomicLong(random.nextInt() + (2 * Integer.MAX_VALUE));
     private static final AtomicInteger intCount = new AtomicInteger(random.nextInt() + (2 * Short.MAX_VALUE));
 
+    // 修改示例方法，移除 id 字段设置，使用新的 id 字段（原 uuid）
     public static ImportTable getImportTableSample1() {
         return new ImportTable()
-            .id(1L)
-            .uuid(UUID.fromString("23d8dc04-a48b-45d9-a01d-4b728f0ad4aa"))
+            // .id(1L) 移除这一行
+            .id("23d8dc04-a48b-45d9-a01d-4b728f0ad4aa")
             .partNumber("partNumber1")
             .partType("partType1")
             .value("value1")
@@ -26,7 +27,7 @@ public class ImportTableTestSamples {
             .manufacture("manufacture1")
             .bCode("bCode1")
             .partsName("partsName1")
-            .itemRegistrationClassification(1)
+            .itemRegistrationClassification("3")
             .spiceModel("spiceModel1")
             .pcbFootPrint("pcbFootPrint1")
             .remark("remark1")
@@ -36,8 +37,8 @@ public class ImportTableTestSamples {
 
     public static ImportTable getImportTableSample2() {
         return new ImportTable()
-            .id(2L)
-            .uuid(UUID.fromString("ad79f240-3727-46c3-b89f-2cf6ebd74367"))
+            // .id(2L) 移除这一行
+            .id("ad79f240-3727-46c3-b89f-2cf6ebd74367")
             .partNumber("partNumber2")
             .partType("partType2")
             .value("value2")
@@ -49,7 +50,7 @@ public class ImportTableTestSamples {
             .manufacture("manufacture2")
             .bCode("bCode2")
             .partsName("partsName2")
-            .itemRegistrationClassification(2)
+            .itemRegistrationClassification("3")
             .spiceModel("spiceModel2")
             .pcbFootPrint("pcbFootPrint2")
             .remark("remark2")
@@ -59,8 +60,8 @@ public class ImportTableTestSamples {
 
     public static ImportTable getImportTableRandomSampleGenerator() {
         return new ImportTable()
-            .id(longCount.incrementAndGet())
-            .uuid(UUID.randomUUID())
+            // .id(longCount.incrementAndGet()) 移除这一行
+            .id(UUID.randomUUID().toString())
             .partNumber(UUID.randomUUID().toString())
             .partType(UUID.randomUUID().toString())
             .value(UUID.randomUUID().toString())
@@ -72,7 +73,7 @@ public class ImportTableTestSamples {
             .manufacture(UUID.randomUUID().toString())
             .bCode(UUID.randomUUID().toString())
             .partsName(UUID.randomUUID().toString())
-            .itemRegistrationClassification(intCount.incrementAndGet())
+            .itemRegistrationClassification("3")
             .spiceModel(UUID.randomUUID().toString())
             .pcbFootPrint(UUID.randomUUID().toString())
             .remark(UUID.randomUUID().toString())

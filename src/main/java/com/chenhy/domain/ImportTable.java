@@ -16,17 +16,10 @@ import org.hibernate.type.SqlTypes;
 @SuppressWarnings("common-java:DuplicatedBlocks")
 public class ImportTable implements Serializable {
 
-    private static final long serialVersionUID = 1L;
-
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id")
-    private Long id;
-
     @NotNull
-    @JdbcTypeCode(SqlTypes.VARCHAR)
-    @Column(name = "uuid", length = 36, nullable = false)
-    private UUID uuid;
+    @Column(name = "id", length = 36, nullable = false)
+    private String id;
 
     @NotNull
     @Column(name = "part_number", nullable = false)
@@ -63,12 +56,12 @@ public class ImportTable implements Serializable {
     private String partsName;
 
     @Column(name = "item_registration_classification")
-    private Integer itemRegistrationClassification;
+    private String itemRegistrationClassification;
 
     @Column(name = "spice_model")
     private String spiceModel;
 
-    @Column(name = "pcb_foot_print")
+    @Column(name = "pcb_footprint")
     private String pcbFootPrint;
 
     @Column(name = "del_flag")
@@ -91,32 +84,26 @@ public class ImportTable implements Serializable {
 
     // jhipster-needle-entity-add-field - JHipster will add fields here
 
-    public Long getId() {
+    public String getId() {
         return this.id;
     }
 
-    public ImportTable id(Long id) {
+    public ImportTable id(String id) {
         this.setId(id);
         return this;
     }
 
-    public void setId(Long id) {
+    public void setId(String id) {
         this.id = id;
     }
 
-    public UUID getUuid() {
-        return this.uuid;
-    }
+    // 删除 id 字段相关定义
+    // 原有的 @Id 注解、@GeneratedValue 注解和 id 字段定义会被删除
 
-    public ImportTable uuid(UUID uuid) {
-        this.setUuid(uuid);
-        return this;
-    }
-
-    public void setUuid(UUID uuid) {
-        this.uuid = uuid;
-    }
-
+    // 删除原有的 uuid 相关方法
+    // public UUID getUuid() { ... }
+    // public ImportTable uuid(UUID uuid) { ... }
+    // public void setUuid(UUID uuid) { ... }
     public String getPartNumber() {
         return this.partNumber;
     }
@@ -260,16 +247,16 @@ public class ImportTable implements Serializable {
         this.partsName = partsName;
     }
 
-    public Integer getItemRegistrationClassification() {
+    public String getItemRegistrationClassification() {
         return this.itemRegistrationClassification;
     }
 
-    public ImportTable itemRegistrationClassification(Integer itemRegistrationClassification) {
+    public ImportTable itemRegistrationClassification(String itemRegistrationClassification) {
         this.setItemRegistrationClassification(itemRegistrationClassification);
         return this;
     }
 
-    public void setItemRegistrationClassification(Integer itemRegistrationClassification) {
+    public void setItemRegistrationClassification(String itemRegistrationClassification) {
         this.itemRegistrationClassification = itemRegistrationClassification;
     }
 
@@ -401,7 +388,6 @@ public class ImportTable implements Serializable {
     public String toString() {
         return "ImportTable{" +
             "id=" + getId() +
-            ", uuid='" + getUuid() + "'" +
             ", partNumber='" + getPartNumber() + "'" +
             ", partType='" + getPartType() + "'" +
             ", value='" + getValue() + "'" +

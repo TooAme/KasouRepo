@@ -45,8 +45,8 @@ public class ImportTableServiceImpl implements ImportTableService {
         return importTableRepository
             .findById(importTable.getId())
             .map(existingImportTable -> {
-                if (importTable.getUuid() != null) {
-                    existingImportTable.setUuid(importTable.getUuid());
+                if (importTable.getId() != null) {
+                    existingImportTable.setId(importTable.getId());
                 }
                 if (importTable.getPartNumber() != null) {
                     existingImportTable.setPartNumber(importTable.getPartNumber());
@@ -123,13 +123,13 @@ public class ImportTableServiceImpl implements ImportTableService {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<ImportTable> findOne(Long id) {
+    public Optional<ImportTable> findOne(String id) {
         LOG.debug("Request to get ImportTable : {}", id);
         return importTableRepository.findById(id);
     }
 
     @Override
-    public void delete(Long id) {
+    public void delete(String id) {
         LOG.debug("Request to delete ImportTable : {}", id);
         importTableRepository.deleteById(id);
     }
