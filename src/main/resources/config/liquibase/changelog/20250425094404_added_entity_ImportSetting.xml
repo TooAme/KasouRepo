@@ -7,10 +7,10 @@
                         http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
 
     <!--
-        Added the entity ImportSetting.
+        Added the entity t_importSetting.
     -->
-    <changeSet id="20250425094404-1" author="jhipster">
-        <createTable tableName="import_setting">
+    <changeSet id="20250425094404-1" author="chenhy">
+        <createTable tableName="t_import_setting">
             <column name="id" type="bigint" autoIncrement="true" startWith="1">
                 <constraints primaryKey="true" nullable="false"/>
             </column>
@@ -40,13 +40,13 @@
           This can be customized by adding or removing 'faker' in the 'spring.liquibase.contexts'
           Spring Boot configuration key.
     -->
-    <changeSet id="20250425094404-1-data" author="jhipster" context="faker">
+    <changeSet id="20250425094404-1-data" author="chenhy">
         <loadData
-                  file="config/liquibase/fake-data/import_setting.csv"
+                  file="config/liquibase/data/data_import_setting.csv"
                   separator=";"
-                  tableName="import_setting"
+                  tableName="t_import_setting"
                   usePreparedStatements="true">
-            <column name="id" type="numeric"/>
+<!--            <column name="id" type="numeric"/>-->
             <column name="tcis_code" type="string"/>
             <column name="tcis_type" type="string"/>
             <column name="tcis_incol" type="string"/>

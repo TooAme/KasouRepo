@@ -107,7 +107,7 @@ public class ImportUploadErrorResource {
             importHistory.setTcihFilename(savedFileName);
             importHistory.setTcihImporttime(Instant.now());
             importHistory.setTcihStatus(!validationResult.hasError);
-            importHistory.setCreateBy(System.getProperty("user.name"));
+            importHistory.setCreateBy(importProcessResource.getCurrentUsername());
             importHistory.setCreateTime(Instant.now());
             importHistory.setDelFlag(true);
             // 保存记录
@@ -196,7 +196,7 @@ public class ImportUploadErrorResource {
             result.ss_list_flag = false;
             // 判断表是否存在
             if (workbook.getNumberOfSheets() < 1) {
-                result.addError("ERR001_ファイルが存在しません。", "N/A");
+                result.addError("ERR001_ファイルが存在しません。（The file does not exist.）", "N/A");
                 return result;
             }
             if (workbook.getNumberOfSheets() < 2) {
@@ -206,7 +206,7 @@ public class ImportUploadErrorResource {
                 Cell cellA2 = row1.getCell(0);
                 //System.out.println(cellA2.toString());
                 if (cellA2 == null || !cellA2.toString().equals("管理番号（SS親部品）")) {
-                    result.addError("ERR002_ファイルフォーマットが不正です。", "2");
+                    result.addError("ERR002_ファイルフォーマットが不正です。（The file format is invalid.）", "2");
                 } else if (cellA2.toString().equals("管理番号（SS親部品）")) {
                     result.ss_list_flag = true;
                     result.clearError();
@@ -232,7 +232,9 @@ public class ImportUploadErrorResource {
                                         if (importTableRepository.findByBCode(getCellValue(nextCell1)).isEmpty()) {
                                             if (result.errorMessage.length() < 4800 && result.errorLine.length() < 240) result.addError(
                                                 // 错误信息超长截断
-                                                "ERR009_SS子部品の管理番号(" + getCellValue(nextCell1) + ")が存在しません。",
+                                                "ERR009_SS子部品の管理番号(" +
+                                                getCellValue(nextCell1) +
+                                                ")が存在しません。（The SS sub part code does not exist.）",
                                                 String.valueOf(i + 1)
                                             );
                                         }
@@ -251,37 +253,55 @@ public class ImportUploadErrorResource {
             if (row3 != null) {
                 Cell cellJ3 = row3.getCell(9); // J列
                 if (cellJ3 == null || cellJ3.toString().trim().isEmpty()) {
-                    result.addError("ERR003_インポートファイルの末端分類コードが空白です。", "3");
+                    result.addError(
+                        "ERR003_インポートファイルの末端分類コードが空白です。（The import file's terminal classification code is blank.）",
+                        "3"
+                    );
                 }
             } else {
-                result.addError("ERR003_インポートファイルの末端分類コードが空白です。", "3");
+                result.addError(
+                    "ERR003_インポートファイルの末端分類コードが空白です。（The import file's terminal classification code is blank.）",
+                    "3"
+                );
             }
             // 检查表二的L3单元格是否为空
             if (row3 != null) {
                 Cell cellL3 = row3.getCell(11); // L列
                 if (cellL3 == null || cellL3.toString().trim().isEmpty()) {
-                    result.addError("ERR004_インポートファイルの末端分類名称が空白です。", "3");
+                    result.addError(
+                        "ERR004_インポートファイルの末端分類名称が空白です。（The import file's terminal classification name is blank.）",
+                        "3"
+                    );
                 }
             } else {
-                result.addError("ERR004_インポートファイルの末端分類名称が空白です。", "3");
+                result.addError(
+                    "ERR004_インポートファイルの末端分類名称が空白です。（The import file's terminal classification name is blank.）",
+                    "3"
+                );
             }
             // 检查表二的E3单元格是否存在于导入对象表中
             if (row3 != null) {
                 Cell cellE3 = row3.getCell(4); // E列
                 if (cellE3 == null || cellE3.toString().trim().isEmpty()) {
-                    result.addError("ERR010_インポートファイルの大分類はインポート対象外です。", "3");
+                    result.addError(
+                        "ERR010_インポートファイルの大分類はインポート対象外です。（The import file's classification code is not exists.）",
+                        "3"
+                    );
                 }
             } else {
-                result.addError("ERR010_インポートファイルの大分類はインポート対象外です。", "3");
+                result.addError(
+                    "ERR010_インポートファイルの大分類はインポート対象外です。（The import file's classification code is not exists.）",
+                    "3"
+                );
             }
             // 检查表二的L3单元格是否在导入設定表中定義了Parts Name
             if (row3 != null) {
                 Cell cellL3 = row3.getCell(11); // L列
                 if (cellL3 == null || cellL3.toString().trim().isEmpty()) {
-                    result.addError("ERR011_インポートファイルはインポート対象外です。", "3");
+                    result.addError("ERR011_インポートファイルはインポート対象外です。（The import file is not in input list.）", "3");
                 }
             } else {
-                result.addError("ERR011_インポートファイルはインポート対象外です。", "3");
+                result.addError("ERR011_インポートファイルはインポート対象外です。（The import file is not in input list.）", "3");
             }
             for (int i = 10; i < sheet.getLastRowNum() + 1; i++) { // 从第11行开始遍历
                 //System.out.println("ラインを読み込む中:　" + i + " 総ライン数: " + sheet.getLastRowNum());
@@ -295,11 +315,17 @@ public class ImportUploadErrorResource {
                     !cellN.toString().trim().equals("DEL") &&
                     !cellN.toString().trim().equals("SS")
                 ) {
-                    result.addError("ERR005_インポートファイルのOrCADパーツDB作成アプリ用フラグが不正です。", String.valueOf(i + 1));
+                    result.addError(
+                        "ERR005_インポートファイルのOrCADパーツDB作成アプリ用フラグが不正です。（The import file's flag for the OrCAD parts database creation application is invalid.）",
+                        String.valueOf(i + 1)
+                    );
                 }
                 Cell cellT = row.getCell(19);
                 if (cellT == null || cellT.toString().trim().isEmpty()) {
-                    result.addError("ERR006_インポートファイルの型番が空白です。", String.valueOf(i + 1));
+                    result.addError(
+                        "ERR006_インポートファイルの型番が空白です。（The import file's model number is blank.）",
+                        String.valueOf(i + 1)
+                    );
                 }
             }
 

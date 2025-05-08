@@ -12,7 +12,7 @@ import org.hibernate.type.SqlTypes;
  * A ImportHistoryDetail.
  */
 @Entity
-@Table(name = "import_history_detail")
+@Table(name = "t_import_his_detail")
 @SuppressWarnings("common-java:DuplicatedBlocks")
 public class ImportHistoryDetail implements Serializable {
 

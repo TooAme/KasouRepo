@@ -12,7 +12,7 @@ import org.hibernate.type.SqlTypes;
  * A ImportTable.
  */
 @Entity
-@Table(name = "import_table")
+@Table(name = "t_import_table")
 @SuppressWarnings("common-java:DuplicatedBlocks")
 public class ImportTable implements Serializable {
 

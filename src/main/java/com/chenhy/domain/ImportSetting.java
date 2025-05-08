@@ -7,7 +7,7 @@ import java.io.Serializable;
  * A ImportSetting.
  */
 @Entity
-@Table(name = "import_setting")
+@Table(name = "t_import_setting")
 @SuppressWarnings("common-java:DuplicatedBlocks")
 public class ImportSetting implements Serializable {
 

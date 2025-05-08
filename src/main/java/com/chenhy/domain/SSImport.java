@@ -12,7 +12,7 @@ import org.hibernate.type.SqlTypes;
  * A SSImport.
  */
 @Entity
-@Table(name = "ss_import")
+@Table(name = "t_ss_import")
 @SuppressWarnings("common-java:DuplicatedBlocks")
 public class SSImport implements Serializable {
 

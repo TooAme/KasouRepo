@@ -831,8 +831,9 @@
             <properties>
                 <!-- default Spring profiles -->
                 <liquibase-plugin.password/>
-                <liquibase-plugin.url>jdbc:mysql://localhost:3306/importDB</liquibase-plugin.url>
+                <liquibase-plugin.url>jdbc:mysql://192.168.1.181:3386/importdb</liquibase-plugin.url>
                 <liquibase-plugin.username>root</liquibase-plugin.username>
+                <liquibase-plugin.password>User1234</liquibase-plugin.password>
                 <profile.test>test,testdev</profile.test>
                 <spring.profiles.active>dev${profile.tls}${profile.no-liquibase}</spring.profiles.active>
             </properties>

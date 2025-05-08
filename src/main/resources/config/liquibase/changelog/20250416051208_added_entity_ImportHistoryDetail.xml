@@ -9,8 +9,8 @@
     <!--
         Added the entity ImportHistoryDetail.
     -->
-    <changeSet id="20250416051208-1" author="jhipster">
-        <createTable tableName="import_history_detail">
+    <changeSet id="20250416051208-1" author="chenhy">
+        <createTable tableName="t_import_his_detail">
             <column name="id" type="bigint" autoIncrement="true" startWith="1500">
                 <constraints primaryKey="true" nullable="false"/>
             </column>
@@ -46,10 +46,15 @@
             </column>
             <!-- jhipster-needle-liquibase-add-column - JHipster will add columns here -->
         </createTable>
-        <dropDefaultValue tableName="import_history_detail" columnName="create_time" columnDataType="${datetimeType}"/>
-        <dropDefaultValue tableName="import_history_detail" columnName="update_time" columnDataType="${datetimeType}"/>
+        <dropDefaultValue tableName="t_import_his_detail" columnName="create_time" columnDataType="${datetimeType}"/>
+        <dropDefaultValue tableName="t_import_his_detail" columnName="update_time" columnDataType="${datetimeType}"/>
     </changeSet>
 
+    <changeSet id="20250508115901" author="chenhy">
+      <modifyDataType tableName="t_import_his_detail"
+                      columnName="tcihd_error"
+                      newDataType="VARCHAR(5000)"/>
+    </changeSet>
     <!-- jhipster-needle-liquibase-add-changeset - JHipster will add changesets here -->
 
     <!--
@@ -60,24 +65,4 @@
           This can be customized by adding or removing 'faker' in the 'spring.liquibase.contexts'
           Spring Boot configuration key.
     -->
-    <changeSet id="20250416051208-1-data" author="jhipster" context="faker">
-        <loadData
-                  file="config/liquibase/fake-data/import_history_detail.csv"
-                  separator=";"
-                  tableName="import_history_detail"
-                  usePreparedStatements="true">
-            <column name="id" type="numeric"/>
-            <column name="uuid" type="string"/>
-            <column name="tcihd_pid" type="string"/>
-            <column name="tcihd_line" type="string"/>
-            <column name="tcihd_error" type="string"/>
-            <column name="create_by" type="string"/>
-            <column name="create_time" type="date"/>
-            <column name="update_by" type="string"/>
-            <column name="update_time" type="date"/>
-            <column name="del_flag" type="boolean"/>
-            <column name="remark" type="string"/>
-            <!-- jhipster-needle-liquibase-add-loadcolumn - JHipster (and/or extensions) can add load columns here -->
-        </loadData>
-    </changeSet>
 </databaseChangeLog>

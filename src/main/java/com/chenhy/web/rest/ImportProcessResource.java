@@ -20,6 +20,9 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 /**
@@ -88,8 +91,12 @@ public class ImportProcessResource {
         }
 
         // 获取所有 partNumber 为 "-" 的 ImportTable 数据并删除
-        List<ImportTable> importTablesToDelete = importTableRepository.findByPartNumber("-");
-        for (ImportTable importTable : importTablesToDelete) importTableService.delete(importTable.getId());
+        List<ImportTable> importTablesToDelete = Optional.ofNullable(importTableRepository.findByPartNumber("-")).orElse(
+            Collections.emptyList()
+        );
+        for (ImportTable importTable : importTablesToDelete) {
+            importTableService.delete(importTable.getId());
+        }
         System.out.println("partNumber が '-' の ImportTable データが削除されました。");
 
         for (File file : normalFile) {
@@ -149,7 +156,7 @@ public class ImportProcessResource {
                 if (existingTable.isPresent()) { // 如果数据已存在，更新该条记录
                     importTable = existingTable.get();
                     System.out.println("管理番号に従ってデータを更新中: " + bCode);
-                    importTable.setUpdateBy(System.getProperty("user.name"));
+                    importTable.setUpdateBy(getCurrentUsername());
                     importTable.setUpdateTime(Instant.now());
                 } else { // 如果数据不存在，创建新记录
                     importTable = new ImportTable();
@@ -158,9 +165,9 @@ public class ImportProcessResource {
                     UUID uuid = UUID.randomUUID();
                     importTable.setUuid(uuid);
                     importTable.setPartType(mattanName);
-                    importTable.setCreateBy(System.getProperty("user.name"));
+                    importTable.setCreateBy(getCurrentUsername());
                     importTable.setCreateTime(Instant.now());
-                    importTable.setUpdateBy(System.getProperty("user.name"));
+                    importTable.setUpdateBy(getCurrentUsername());
                     importTable.setUpdateTime(Instant.now()); // 创建同时也是更新
                     System.out.println("末端分類名: " + mattanName);
                     int attributeRow = 0;
@@ -275,11 +282,11 @@ public class ImportProcessResource {
                         ssImport.setUuid(uuid);
                         ssImport.setSsBCode(getCellValue(row.getCell(0)));
                         ssImport.setSsSubBCode(getCellValue(sheetSs.getRow(rowIndex + 1).getCell(1)));
-                        ssImport.setSsCreateBy(System.getProperty("user.name"));
+                        ssImport.setSsCreateBy(getCurrentUsername());
                         ssImport.setSsFilename(getCellValue(row.getCell(2))); //写的是文件名，但是获取不到
-                        ssImport.setCreateBy(System.getProperty("user.name"));
+                        ssImport.setCreateBy(getCurrentUsername());
                         ssImport.setCreateTime(Instant.now());
-                        ssImport.setUpdateBy(System.getProperty("user.name"));
+                        ssImport.setUpdateBy(getCurrentUsername());
                         ssImport.setUpdateTime(Instant.now());
                         ssImport.setDelFlag(true);
                         System.out.println("SS親部品新規作成中: " + getCellValue(row.getCell(0)));
@@ -297,11 +304,11 @@ public class ImportProcessResource {
                         break;
                     }
                     ssImport.setSsSubBCode(getCellValue(row.getCell(1)));
-                    ssImport.setSsCreateBy(System.getProperty("user.name"));
+                    ssImport.setSsCreateBy(getCurrentUsername());
                     ssImport.setSsFilename(getCellValue(row.getCell(2))); // 写的是文件名，但是获取不到
-                    ssImport.setCreateBy(System.getProperty("user.name"));
+                    ssImport.setCreateBy(getCurrentUsername());
                     ssImport.setCreateTime(Instant.now());
-                    ssImport.setUpdateBy(System.getProperty("user.name"));
+                    ssImport.setUpdateBy(getCurrentUsername());
                     ssImport.setUpdateTime(Instant.now());
                     ssImport.setDelFlag(true);
                     System.out.println("SS子部品新規作成中: " + getCellValue(row.getCell(1)));
@@ -647,7 +654,7 @@ public class ImportProcessResource {
                 newImportTable.setManufacture(importTable.getManufacture());
                 newImportTable.setCreateBy(importTable.getCreateBy());
                 newImportTable.setCreateTime(importTable.getCreateTime());
-                newImportTable.setUpdateBy(System.getProperty("user.name"));
+                newImportTable.setUpdateBy(getCurrentUsername());
                 newImportTable.setUpdateTime(Instant.now());
                 newImportTable.setDelFlag(importTable.getDelFlag());
                 newImportTable.setItemRegistrationClassification(importTable.getItemRegistrationClassification());
@@ -666,5 +673,15 @@ public class ImportProcessResource {
                 System.out.println("新しい SS データがインポートテーブルに作成されました: " + newImportTable.getbCode());
             }
         }
+    }
+
+    public String getCurrentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof String) {
+            return (String) authentication.getPrincipal();
+        } else if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+            return ((UserDetails) authentication.getPrincipal()).getUsername();
+        }
+        return null;
     }
 }
