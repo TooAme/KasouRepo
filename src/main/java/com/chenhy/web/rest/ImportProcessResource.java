@@ -102,12 +102,12 @@ public class ImportProcessResource {
         for (ImportTable importTable : importTablesToDelete) {
             importTableService.delete(importTable.getId());
         }
-        System.out.println("partNumber が '-' の ImportTable データが削除されました。");
+        log.info("partNumber が '-' の ImportTable データが削除されました。");
 
         for (File file : normalFile) {
             if (processedFiles.contains(file.getAbsolutePath())) {
                 log.info("処理済み单品ファイル、スキップします: " + file.getName());
-                System.out.println("処理済み单品ファイル、スキップします: " + file.getName());
+                log.info("処理済み单品ファイル、スキップします: " + file.getName());
                 continue;
             }
             processNormalFile(file);
@@ -117,7 +117,7 @@ public class ImportProcessResource {
         for (File file : ssListFile) {
             if (processedFiles.contains(file.getAbsolutePath())) {
                 log.info("処理済みSSリストファイル、スキップします:" + file.getName());
-                System.out.println("処理済みSSリストファイル、スキップします:" + file.getName());
+                log.info("処理済みSSリストファイル、スキップします:" + file.getName());
                 continue;
             }
             processSsListFile(file);
@@ -129,22 +129,20 @@ public class ImportProcessResource {
     private void processNormalFile(File file) {
         if (file == null) return;
 
-        System.out.println("普通単品ファイルの取り扱いでいます: " + file.getName());
+        log.info("普通単品ファイルの取り扱いでいます: " + file.getName());
 
         try (FileInputStream fis = new FileInputStream(file)) {
             Workbook workbook = new XSSFWorkbook(fis);
             Sheet sheet = workbook.getSheetAt(1);
             Row characteristicRow = workbook.getSheetAt(1).getRow(2);
             String mattanName = getCellValue(sheet.getRow(2).getCell(11));
-            String classifyName = convertAfterFirstUppercase(getCellValueBeforeNewline(sheet.getRow(2).getCell(4))); // 从Excel获取表名（如"resistor_table"）
-
+            String classifyName = convertAfterFirstUppercase(getCellValueBeforeNewline(sheet.getRow(2).getCell(4)).replaceAll("[^a-zA-Z0-9]","_")); // 从Excel获取表名（如"resistor_table"）
+            log.info(classifyName);
             // 动态获取仓库和服务
-            String capitalizedClassName = classifyName.substring(0, 1).toUpperCase() + classifyName.substring(1);
             try {
-                Class<?> repositoryClass = Class.forName("com.chenhy.repository.commonEntity." + capitalizedClassName + "Repository");
-                Class<?> serviceClass = Class.forName("com.chenhy.service.impl.commonEntity." + capitalizedClassName + "ServiceImpl");
+                Class<?> repositoryClass = Class.forName("com.chenhy.repository.commonEntity." + classifyName + "Repository");
+                Class<?> serviceClass = Class.forName("com.chenhy.service.impl.commonEntity." + classifyName + "ServiceImpl");
 
-                // 假设 Spring 容器中有这些 Bean
                 Object repository = applicationContext.getBean(repositoryClass);
                 Object service = applicationContext.getBean(serviceClass);
 
@@ -180,16 +178,16 @@ public class ImportProcessResource {
                     Object importTable;
                     if (existingTable.isPresent()) { // 如果数据已存在，更新该条记录
                         importTable = existingTable.get();
-                        System.out.println("管理番号に従ってデータを更新中: " + bCode);
+                        log.info("管理番号に従ってデータを更新中: " + bCode);
                         // 动态设置更新信息
                         java.lang.reflect.Method setUpdateByMethod = importTable.getClass().getMethod("setUpdateBy", String.class);
                         setUpdateByMethod.invoke(importTable, getCurrentUsername());
                         java.lang.reflect.Method setUpdateTimeMethod = importTable.getClass().getMethod("setUpdateTime", Instant.class);
                         setUpdateTimeMethod.invoke(importTable, Instant.now());
                     } else { // 如果数据不存在，创建新记录
-                        Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + capitalizedClassName);
+                        Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
                         importTable = entityClass.getDeclaredConstructor().newInstance();
-                        System.out.println("管理番号から新しいデータを作成中: " + bCode);
+                        log.info("管理番号から新しいデータを作成中: " + bCode);
 
                         java.lang.reflect.Method setIdMethod = importTable.getClass().getMethod("setId", String.class);
                         String uuid = UUID.randomUUID().toString();
@@ -204,10 +202,10 @@ public class ImportProcessResource {
                         setUpdateByMethod.invoke(importTable, getCurrentUsername());
                         java.lang.reflect.Method setUpdateTimeMethod = importTable.getClass().getMethod("setUpdateTime", Instant.class);
                         setUpdateTimeMethod.invoke(importTable, Instant.now()); // 创建同时也是更新
-                        System.out.println("末端分類名: " + mattanName);
+                        log.info("末端分類名: " + mattanName);
                         int attributeRow = 0;
                         attributeRow = findRow2(mattanName);
-                        System.out.println("属性項目対応表に対応行: Row" + attributeRow);
+                        log.info("属性項目対応表に対応行: Row" + attributeRow);
                         FileInputStream fis2 = new FileInputStream("属性項目対応表.xlsx");
                         Workbook attributeWorkbook = new XSSFWorkbook(fis2);
                         Sheet attributeSheet = attributeWorkbook.getSheetAt(0);
@@ -286,21 +284,21 @@ public class ImportProcessResource {
                         }
                     }
                     // 保存或更新记录
-                    Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + capitalizedClassName);
+                    Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
                     java.lang.reflect.Method saveMethod = serviceClass.getMethod("save", entityClass);
                     saveMethod.invoke(service, importTable);
                     CURRENT_TABLE_NAME.remove();
                 }
             } catch (Exception e) {
-                log.error("动态操作数据表失败: " + classifyName, e);
+                log.error("{} は既に使われていません。" ,classifyName);
             }
         } catch (IOException e) {
-            log.error(e.getMessage(), e);
+            log.info("スキップ: " + file.getName());
         }
     }
 
     private void processSsListFile(File file) {
-        System.out.println("SSリストファイル処理中:" + file.getName());
+        log.info("SSリストファイル処理中:" + file.getName());
         sSImportRepository.deleteAll(); // 删除 ssImport 临时数据库的所有数据
         // ss清单文件处理
         try (FileInputStream fis = new FileInputStream(file)) {
@@ -332,7 +330,7 @@ public class ImportProcessResource {
                         ssImport.setUpdateBy(getCurrentUsername());
                         ssImport.setUpdateTime(Instant.now());
                         ssImport.setDelFlag(true);
-                        System.out.println("SS親部品新規作成中: " + getCellValue(row.getCell(0)));
+                        log.info("SS親部品新規作成中: " + getCellValue(row.getCell(0)));
                         sSImportService.save(ssImport);
                     }
                 }
@@ -354,7 +352,7 @@ public class ImportProcessResource {
                     ssImport.setUpdateBy(getCurrentUsername());
                     ssImport.setUpdateTime(Instant.now());
                     ssImport.setDelFlag(true);
-                    System.out.println("SS子部品新規作成中: " + getCellValue(row.getCell(1)));
+                    log.info("SS子部品新規作成中: " + getCellValue(row.getCell(1)));
                     sSImportService.save(ssImport);
                 }
             }
@@ -385,7 +383,7 @@ public class ImportProcessResource {
      * @param cell 单元格（cell格式）
      * @return 单元格字符串中换行符前的部分
      */
-    private String getCellValueBeforeNewline(Cell cell) {
+    public String getCellValueBeforeNewline(Cell cell) {
         if (cell == null) return "";
         String value =
             switch (cell.getCellType()) {
@@ -419,10 +417,10 @@ public class ImportProcessResource {
                 // 检查B、C、D列（0-based索引为1,2,3）
                 for (int colNum = 0; colNum < 5; colNum++) {
                     Cell cell = row.getCell(colNum);
-                    //System.out.println(rowNum + " " + colNum);
+                    //log.info(rowNum + " " + colNum);
                     if (cell != null) {
                         String cellValue = getCellValue(cell);
-                        //System.out.println("cellvalue:" + cellValue + "," + "searching string:" + searchString);
+                        //log.info("cellvalue:" + cellValue + "," + "searching string:" + searchString);
                         if (searchString.equals(cellValue)) {
                             return rowNum + 1; // 转换为1-based行号
                         }
@@ -471,7 +469,7 @@ public class ImportProcessResource {
         if (setting.isPresent()) {
             String tcisIncol = setting.get().getTcisIncol();
             String tcisEditrule = setting.get().getTcisEditrule();
-            System.out.println(
+            log.info(
                 settingCharacter2 +
                 "が見つかりました in " +
                 setting.get().getId() +
@@ -493,6 +491,8 @@ public class ImportProcessResource {
                     }
                     if(settingCharacter2.equals("B_CODE"))
                         methodName = "setbCode";
+                    if(settingCharacter2.equals("PACKAGE_TYPE"))
+                        methodName = "setPcbFootPrint";
                     if(!settingCharacter2.equals("DEL"))
                     {
                         java.lang.reflect.Method setterMethod = importTable.getClass().getMethod(methodName, String.class);
@@ -522,6 +522,8 @@ public class ImportProcessResource {
                     String methodName = toCamelCase("set_" + settingCharacter2);
                     if(settingCharacter2.equals("ITEM_REGISTRATION_CLASSFICATION"))
                         methodName = "setItemRegistrationClassification";
+                    if(settingCharacter2.equals("PACKAGE_TYPE"))
+                        methodName = "setPcbFootPrint";
                     if(settingCharacter2.equals("DEL"))
                     {
                         methodName = "setDelFlag";
@@ -625,7 +627,7 @@ public class ImportProcessResource {
      *  在 ssImport 数据库中找到所有 ssSubBCode 与自身下一条数据的 ssSubBCode 相等的数据
      */
     public void injectSSIntoImportTable() {
-        System.out.println("SSインポートテーブルに子部品が存在するSS親部品をインポートテーブルに注入します...");
+        log.info("SSインポートテーブルに子部品が存在するSS親部品をインポートテーブルに注入します...");
         List<SSImport> ssImports = sSImportRepository.findAll();
         Map<String, List<SSImport>> ssSubBCodeMap = new HashMap<>();
         for (int i = 0; i < ssImports.size() - 1; i++) {
@@ -668,7 +670,7 @@ public class ImportProcessResource {
                 newImportTable.setPartsName(importTable.getPartsName());
 
                 importTableService.save(newImportTable);
-                System.out.println("新しい SS データがインポートテーブルに作成されました: " + newImportTable.getbCode());
+                log.info("新しい SS データがインポートテーブルに作成されました: " + newImportTable.getbCode());
             }
         }
     }
@@ -688,30 +690,41 @@ public class ImportProcessResource {
     }
 
     /**
-     * 将字符串第一个大写字母后的所有大写字母转为小写，用于根据大分类名称动态调用方法
+     * 将字符串第一个大写字母后的所有大写字母转为小写，每一个下划线后的第一个字母也要大写用于根据大分类名称动态调用方法
      * @param input 输入字符串
      * @return 转换后的字符串
      */
     public String convertAfterFirstUppercase(String input) {
-        if (input == null || input.isEmpty()) {
-            return input;
-        }
-
-        char[] chars = input.toCharArray();
-        boolean firstUppercaseFound = false;
-
-        for (int i = 0; i < chars.length; i++) {
-            if (Character.isUpperCase(chars[i])) {
-                if (!firstUppercaseFound) {
-                    firstUppercaseFound = true;
-                } else {
-                    chars[i] = Character.toLowerCase(chars[i]);
-                }
-            }
-        }
-
-        return new String(chars);
+    if (input == null || input.isEmpty()) {
+        return input;
     }
+
+    char[] chars = input.toCharArray();
+    boolean firstUppercaseFound = false;
+    boolean afterUnderscore = false;
+
+    for (int i = 0; i < chars.length; i++) {
+        char c = chars[i];
+
+        if (c == '_') {
+            afterUnderscore = true;
+            continue;
+        }
+
+        if (!firstUppercaseFound || afterUnderscore) {
+            // 第一个字符或下划线后的第一个字符：转为大写
+            chars[i] = Character.toUpperCase(c);
+            firstUppercaseFound = true;
+            afterUnderscore = false;
+        } else {
+            // 其他字符转为小写
+            chars[i] = Character.toLowerCase(c);
+        }
+    }
+
+    return new String(chars).replaceAll("_","");
+}
+
 
     /**
      * 将字符串根据下划线分割转为驼峰命名格式

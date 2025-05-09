@@ -13,14 +13,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import jakarta.persistence.*;
+
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -40,6 +41,30 @@ public class ImportUploadErrorResource {
     private final ImportTableRepository importTableRepository;
 
     private final String uploadDirectory = "file";
+
+    @Autowired
+    private ApplicationContext context;
+    private final Set<String> VALID_CLASSIFY_NAMES = loadValidClassifyNames();
+    private Set<String> loadValidClassifyNames() {
+        Set<String> names = new HashSet<>();
+
+        // 获取 com.chenhy.domain.commonEntity 包下的所有 Entity 类
+        String packageName = "com.chenhy.domain.commonEntity";
+        String[] beanNames = null;
+        if (context != null) {
+            beanNames = context.getBeanDefinitionNames();
+        }
+        if (beanNames != null) {
+            for (String beanName : beanNames) {
+                Class<?> beanClass = context.getType(beanName);
+                if (beanClass != null && beanClass.getPackageName().equals(packageName)) {
+                    names.add(beanClass.getSimpleName());
+                }
+            }
+        }
+        log.info("Found bean names for annotation @Entity: {}", Arrays.toString(beanNames));
+        return names;
+    }
 
     @Autowired
     public ImportUploadErrorResource(
@@ -204,14 +229,14 @@ public class ImportUploadErrorResource {
                 Sheet sheet1 = workbook.getSheetAt(0);
                 Row row1 = sheet1.getRow(1);
                 Cell cellA2 = row1.getCell(0);
-                //System.out.println(cellA2.toString());
+                //log.info(cellA2.toString());
                 if (cellA2 == null || !cellA2.toString().equals("管理番号（SS親部品）")) {
                     result.addError("ERR002_ファイルフォーマットが不正です。（The file format is invalid.）", "2");
                 } else if (cellA2.toString().equals("管理番号（SS親部品）")) {
                     result.ss_list_flag = true;
                     result.clearError();
                     for (int i = 2; i < sheet1.getLastRowNum() + 1; i++) { // 从第3行開始遍历
-                        //System.out.println("ラインを読み込む中:　" + i + " 総ライン数: " + sheet1.getLastRowNum());
+                        //log.info("ラインを読み込む中:　" + i + " 総ライン数: " + sheet1.getLastRowNum());
                         Row row = sheet1.getRow(i);
                         if (isRowEmpty(row)) break;
                         if (
@@ -282,7 +307,14 @@ public class ImportUploadErrorResource {
             // 检查表二的E3单元格是否存在于导入对象表中
             if (row3 != null) {
                 Cell cellE3 = row3.getCell(4); // E列
+                String classifyName = importProcessResource.convertAfterFirstUppercase(importProcessResource.getCellValueBeforeNewline(cellE3).replaceAll("[^a-zA-Z0-9]","_"));
                 if (cellE3 == null || cellE3.toString().trim().isEmpty()) {
+                    result.addError(
+                        "ERR010_インポートファイルの大分類はインポート対象外です。（The import file's classification code is not exists.）",
+                        "3"
+                    );
+                }
+                else if (!VALID_CLASSIFY_NAMES.contains(classifyName)) {
                     result.addError(
                         "ERR010_インポートファイルの大分類はインポート対象外です。（The import file's classification code is not exists.）",
                         "3"
@@ -303,8 +335,9 @@ public class ImportUploadErrorResource {
             } else {
                 result.addError("ERR011_インポートファイルはインポート対象外です。（The import file is not in input list.）", "3");
             }
+
             for (int i = 10; i < sheet.getLastRowNum() + 1; i++) { // 从第11行开始遍历
-                //System.out.println("ラインを読み込む中:　" + i + " 総ライン数: " + sheet.getLastRowNum());
+                //log.info("ラインを読み込む中:　" + i + " 総ライン数: " + sheet.getLastRowNum());
                 Row row = sheet.getRow(i);
                 if (isRowEmpty(row)) break; // 解决getLastRow方法不准确问题
 

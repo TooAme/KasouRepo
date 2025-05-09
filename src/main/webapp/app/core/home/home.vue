@@ -187,6 +187,12 @@ h2 {
   font-size: 1.25vw;
   color: #2c3e50;
   font-weight: 100;
+  padding-right: -10px;
+  align-content: center;
+  align-self: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .refresh-button {
