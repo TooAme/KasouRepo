@@ -13,6 +13,8 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import jakarta.annotation.PostConstruct;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -42,6 +44,17 @@ public class ImportProcessResource {
     private final ApplicationContext applicationContext;
     public static final ThreadLocal<String> CURRENT_TABLE_NAME = new ThreadLocal<>();
     Logger log = LoggerFactory.getLogger(ImportProcessResource.class);
+    private Sheet attributeSheet;
+    private static final Map<String, Class<?>> repositoryClassCache = new HashMap<>();
+    private static final Map<String, Class<?>> serviceClassCache = new HashMap<>();
+
+    @PostConstruct
+    public void init() throws IOException {
+        try (FileInputStream fis = new FileInputStream("属性項目対応表.xlsx")) {
+            Workbook attributeWorkbook = new XSSFWorkbook(fis);
+            this.attributeSheet = attributeWorkbook.getSheetAt(0);
+        }
+    }
 
     @Autowired
     public ImportProcessResource(
@@ -81,7 +94,7 @@ public class ImportProcessResource {
                     if (row != null) {
                         Cell cell = row.getCell(0); // 获取A2单元格
                         if (cell != null) {
-                            String value = cell.toString();
+                            String value = getCellValue(cell);
                             if (value.equals("管理番号（SS親部品）")) {
                                 ssListFile.add(file);
                             } else {
@@ -96,13 +109,13 @@ public class ImportProcessResource {
         }
 
         // 获取所有 partNumber 为 "-" 的 ImportTable 数据并删除
-        List<ImportTable> importTablesToDelete = Optional.ofNullable(importTableRepository.findByPartNumber("-")).orElse(
-            Collections.emptyList()
-        );
-        for (ImportTable importTable : importTablesToDelete) {
-            importTableService.delete(importTable.getId());
-        }
-        log.info("partNumber が '-' の ImportTable データが削除されました。");
+//        List<ImportTable> importTablesToDelete = Optional.ofNullable(importTableRepository.findByPartNumber("-")).orElse(
+//            Collections.emptyList()
+//        );
+//        for (ImportTable importTable : importTablesToDelete) {
+//            importTableService.delete(importTable.getId());
+//        }
+//        log.info("partNumber が '-' の ImportTable データが削除されました。");
 
         for (File file : normalFile) {
             if (processedFiles.contains(file.getAbsolutePath())) {
@@ -138,10 +151,30 @@ public class ImportProcessResource {
             String mattanName = getCellValue(sheet.getRow(2).getCell(11));
             String classifyName = convertAfterFirstUppercase(getCellValueBeforeNewline(sheet.getRow(2).getCell(4)).replaceAll("[^a-zA-Z0-9]","_")); // 从Excel获取表名（如"resistor_table"）
             log.info(classifyName);
+
             // 动态获取仓库和服务
             try {
-                Class<?> repositoryClass = Class.forName("com.chenhy.repository.commonEntity." + classifyName + "Repository");
-                Class<?> serviceClass = Class.forName("com.chenhy.service.impl.commonEntity." + classifyName + "ServiceImpl");
+
+                Class<?> repositoryClass = repositoryClassCache.computeIfAbsent(classifyName, k ->
+                    {
+                        try {
+                            return Class.forName("com.chenhy.repository.commonEntity." + k + "Repository");
+                        } catch (ClassNotFoundException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                );
+                Class<?> serviceClass = serviceClassCache.computeIfAbsent(classifyName, k ->
+                    {
+                        try {
+                            return Class.forName("com.chenhy.service.impl.commonEntity." + k + "ServiceImpl");
+                        } catch (ClassNotFoundException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                );
+                //Class<?> repositoryClass = Class.forName("com.chenhy.repository.commonEntity." + classifyName + "Repository");
+                //Class<?> serviceClass = Class.forName("com.chenhy.service.impl.commonEntity." + classifyName + "ServiceImpl");
 
                 Object repository = applicationContext.getBean(repositoryClass);
                 Object service = applicationContext.getBean(serviceClass);
@@ -189,6 +222,14 @@ public class ImportProcessResource {
                         importTable = entityClass.getDeclaredConstructor().newInstance();
                         log.info("管理番号から新しいデータを作成中: " + bCode);
 
+                        ImportTable remarkData = new ImportTable();
+                        remarkData.setId(UUID.randomUUID().toString());
+                        remarkData.setbCode(bCode + "*");
+                        remarkData.setPartNumber("mark");
+                        remarkData.setPartType("mark");
+                        remarkData.setRemark(classifyName);
+                        importTableService.save(remarkData);
+
                         java.lang.reflect.Method setIdMethod = importTable.getClass().getMethod("setId", String.class);
                         String uuid = UUID.randomUUID().toString();
                         setIdMethod.invoke(importTable, uuid);
@@ -206,9 +247,6 @@ public class ImportProcessResource {
                         int attributeRow = 0;
                         attributeRow = findRow2(mattanName);
                         log.info("属性項目対応表に対応行: Row" + attributeRow);
-                        FileInputStream fis2 = new FileInputStream("属性項目対応表.xlsx");
-                        Workbook attributeWorkbook = new XSSFWorkbook(fis2);
-                        Sheet attributeSheet = attributeWorkbook.getSheetAt(0);
 
                         setTableCharacter(importTable, row, "COMMON", "SCHEMATIC_PART");
                         setTableCharacter(importTable, row, "COMMON", "PART_NUMBER");
@@ -287,9 +325,11 @@ public class ImportProcessResource {
                     Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
                     java.lang.reflect.Method saveMethod = serviceClass.getMethod("save", entityClass);
                     saveMethod.invoke(service, importTable);
+
                     CURRENT_TABLE_NAME.remove();
                 }
             } catch (Exception e) {
+                log.error(e.getMessage());
                 log.error("{} は既に使われていません。" ,classifyName);
             }
         } catch (IOException e) {
@@ -405,14 +445,12 @@ public class ImportProcessResource {
      * @throws IOException IO异常
      */
     public int findRow2(String searchString) throws IOException {
-        try (FileInputStream fis = new FileInputStream("属性項目対応表.xlsx"); Workbook workbook = new XSSFWorkbook(fis)) {
-            Sheet sheet = workbook.getSheetAt(0);
-            if (sheet == null) {
+        if (attributeSheet == null) {
                 throw new IllegalArgumentException("Sheet not found");
             }
             // 从第11行开始（0-based索引为10）
-            for (int rowNum = 10; rowNum <= sheet.getLastRowNum(); rowNum++) {
-                Row row = sheet.getRow(rowNum);
+            for (int rowNum = 10; rowNum <= attributeSheet.getLastRowNum(); rowNum++) {
+                Row row = attributeSheet.getRow(rowNum);
                 if (row == null) continue;
                 // 检查B、C、D列（0-based索引为1,2,3）
                 for (int colNum = 0; colNum < 5; colNum++) {
@@ -427,7 +465,6 @@ public class ImportProcessResource {
                     }
                 }
             }
-        }
         return -1;
     }
 
@@ -635,9 +672,10 @@ public class ImportProcessResource {
             SSImport next = ssImports.get(i + 1);
 
             if (current.getSsSubBCode() != null && current.getSsSubBCode().equals(next.getSsSubBCode())) {
-                ssSubBCodeMap.computeIfAbsent(current.getSsSubBCode(), k -> new ArrayList<>()).add(current);
+                ssSubBCodeMap.computeIfAbsent(current.getSsSubBCode() + "*", k -> new ArrayList<>()).add(current);
             }
         }
+        /// //////////////////////////////////////////////////
         // 检查这些编号是否存在于 ImportTable 数据库中
         List<String> ssSubBCodeList = new ArrayList<>(ssSubBCodeMap.keySet());
         List<ImportTable> matchingImportTables = importTableRepository.findByBCodeIn(ssSubBCodeList);

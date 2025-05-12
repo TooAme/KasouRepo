@@ -2,6 +2,7 @@ package com.chenhy.web.rest;
 
 import com.chenhy.domain.ImportHistory;
 import com.chenhy.domain.ImportHistoryDetail;
+import com.chenhy.repository.ImportSettingRepository;
 import com.chenhy.repository.ImportTableRepository;
 import com.chenhy.service.ImportHistoryDetailService;
 import com.chenhy.service.ImportHistoryService;
@@ -20,6 +21,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.ResponseEntity;
@@ -39,7 +41,10 @@ public class ImportUploadErrorResource {
     private final ImportHistoryDetailService importHistoryDetailService;
     private final ImportProcessResource importProcessResource;
     private final ImportTableRepository importTableRepository;
+    private final ImportSettingRepository importSettingRepository;
 
+
+    private final ApplicationContext applicationContext;
     private final String uploadDirectory = "file";
 
     @Autowired
@@ -47,12 +52,14 @@ public class ImportUploadErrorResource {
         ImportHistoryService importHistoryService,
         ImportHistoryDetailService importHistoryDetailService,
         ImportProcessResource importProcessResource,
-        ImportTableRepository importTableRepository
-    ) {
+        ImportTableRepository importTableRepository,
+        ImportSettingRepository importSettingRepository, ApplicationContext applicationContext) {
         this.importHistoryService = importHistoryService;
         this.importHistoryDetailService = importHistoryDetailService;
         this.importProcessResource = importProcessResource;
         this.importTableRepository = importTableRepository;
+        this.importSettingRepository = importSettingRepository;
+        this.applicationContext = applicationContext;
 
         // 创建上传目录
         File directory = new File(uploadDirectory);
@@ -217,10 +224,10 @@ public class ImportUploadErrorResource {
                         if (isRowEmpty(row)) break;
                         if (
                             row != null &&
-                            row.getCell(0) != null &&
-                            row.getCell(1) == null &&
-                            sheet1.getRow(i + 1) != null &&
-                            sheet1.getRow(i + 1).getCell(1) != null
+                                row.getCell(0) != null &&
+                                row.getCell(1) == null &&
+                                sheet1.getRow(i + 1) != null &&
+                                sheet1.getRow(i + 1).getCell(1) != null
                         ) {
                             Cell cell0 = row.getCell(0);
                             Row nextRow = sheet1.getRow(i + 1);
@@ -230,12 +237,12 @@ public class ImportUploadErrorResource {
                             ) {
                                 if (nextRow != null) {
                                     if (nextCell1 != null && !getCellValue(nextCell1).isEmpty()) {
-                                        if (importTableRepository.findByBCode(getCellValue(nextCell1)).isEmpty()) {
+                                        if (importTableRepository.findByBCode(getCellValue(nextCell1) + "*").isEmpty()) {
                                             if (result.errorMessage.length() < 4800 && result.errorLine.length() < 240) result.addError(
                                                 // 错误信息超长截断
                                                 "ERR009_SS子部品の管理番号(" +
-                                                getCellValue(nextCell1) +
-                                                ")が存在しません。（The SS sub part code does not exist.）",
+                                                    getCellValue(nextCell1) +
+                                                    ")が存在しません。（The SS sub part code does not exist.）",
                                                 String.valueOf(i + 1)
                                             );
                                         }
@@ -243,6 +250,78 @@ public class ImportUploadErrorResource {
                                 }
                             }
                         }
+
+/* ////////////////////////////////////////////////////////////////////////////////////////////////////////
+                     String commonEntityPath = "src/main/java/com/chenhy/domain/commonEntity";
+                    List<String> fileNames = getFileNames(commonEntityPath);
+                    if (fileNames != null) {
+                        List<String> classifyNames = fileNames.stream()
+                            .map(fileName -> fileName.replace(".java", ""))
+                            .toList();
+                       for (String classifyName : classifyNames) {
+                            // 假设 classifyName 是 "User"，则完整类名为 com.chenhy.repository.commonEntity.UserRepository
+                            String repositoryClassName = "com.chenhy.repository.commonEntity." + classifyName + "Repository";
+                            log.info("searching SS subBcode: " + repositoryClassName);
+
+                            for (int i = 2; i < sheet1.getLastRowNum() + 1; i++) { // 从第3行開始遍历
+                                //log.info("ラインを読み込む中:　" + i + " 総ライン数: " + sheet1.getLastRowNum());
+                                Row row = sheet1.getRow(i);
+                                if (isRowEmpty(row)) break;
+                                if (
+                                    row != null &&
+                                        row.getCell(0) != null &&
+                                        row.getCell(1) == null &&
+                                        sheet1.getRow(i + 1) != null &&
+                                        sheet1.getRow(i + 1).getCell(1) != null
+                                ) {
+                                    Cell cell0 = row.getCell(0);
+                                    Row nextRow = sheet1.getRow(i + 1);
+                                    Cell nextCell1 = nextRow.getCell(1);
+                                    if (
+                                        cell0 != null && !getCellValue(cell0).isEmpty() && nextCell1 != null && !getCellValue(nextCell1).isEmpty()
+                                    ) {
+                                        if (nextRow != null) {
+                                            if (nextCell1 != null && !getCellValue(nextCell1).isEmpty()) {
+
+                                                try {
+                                                    Class<?> repositoryClass = Class.forName(repositoryClassName);
+                                                    Object repositoryBean = applicationContext.getBean(repositoryClass);
+
+                                                    // 调用 findByBCode 方法（注意：这里需要使用反射调用方法）
+                                                    java.lang.reflect.Method method = repositoryClass.getMethod("findByBCode", String.class);
+                                                    Object findResult = method.invoke(repositoryBean, getCellValue(nextCell1));
+
+                                                    // 判断是否为空（假设返回类型是 Optional 或 Collection）
+                                                    boolean isEmpty = false;
+                                                    if (findResult instanceof Collection<?>) {
+                                                        isEmpty = ((Collection<?>) findResult).isEmpty();
+                                                    } else if (findResult instanceof Optional<?>) {
+                                                        isEmpty = ((Optional<?>) findResult).isEmpty();
+                                                    }
+
+                                                    if (isEmpty) {
+                                                        // 添加错误信息
+                                                        if (result.errorMessage.length() < 4800 && result.errorLine.length() < 240) {
+                                                            result.addError(
+                                                                "ERR009_SS子部品の管理番号(" +
+                                                                    getCellValue(nextCell1) +
+                                                                    ")が存在しません。（The SS sub part code does not exist.）",
+                                                                String.valueOf(i + 1)
+                                                            );
+                                                        }
+                                                    }
+
+                                                } catch (Exception e) {
+                                                    log.error("Error dynamically invoking findByBCode on {}", repositoryClassName, e);
+                                                }
+
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        *///////////////////////////////////////////////////////////////////////
                     }
                 }
                 return result;
@@ -283,7 +362,7 @@ public class ImportUploadErrorResource {
             // 检查表二的E3单元格是否存在于导入对象表中
             if (row3 != null) {
                 Cell cellE3 = row3.getCell(4); // E列
-                String classifyName = importProcessResource.convertAfterFirstUppercase(importProcessResource.getCellValueBeforeNewline(cellE3).replaceAll("[^a-zA-Z0-9]","_"));
+                String classifyName = importProcessResource.convertAfterFirstUppercase(importProcessResource.getCellValueBeforeNewline(cellE3).replaceAll("[^a-zA-Z0-9]", "_"));
                 String commonEntityPath = "src/main/java/com/chenhy/domain/commonEntity";
                 log.info("route: " + getFileNames(commonEntityPath));
                 if (cellE3 == null || cellE3.toString().trim().isEmpty()) {
@@ -291,8 +370,7 @@ public class ImportUploadErrorResource {
                         "ERR010_インポートファイルの大分類はインポート対象外です。（The import file's classification code is not exists.）",
                         "3"
                     );
-                }
-                else if (!Objects.requireNonNull(getFileNames(commonEntityPath)).toString().contains(classifyName)) {
+                } else if (!Objects.requireNonNull(getFileNames(commonEntityPath)).toString().contains(classifyName)) {
                     result.addError(
                         "ERR010_インポートファイルの大分類はインポート対象外です。（The import file's classification code is not exists.）",
                         "3"
@@ -306,10 +384,20 @@ public class ImportUploadErrorResource {
             }
             // 检查表二的L3单元格是否在导入設定表中定義了Parts Name
             if (row3 != null) {
-                Cell cellL3 = row3.getCell(11); // L列
+                Cell cellL3 = row3.getCell(11); // L列 mattanName
                 if (cellL3 == null || cellL3.toString().trim().isEmpty()) {
                     result.addError("ERR011_インポートファイルはインポート対象外です。（The import file is not in input list.）", "3");
                 }
+                    else if (importSettingRepository.findAllByTcisCode(getCellValue(cellL3)).isEmpty())
+                    {
+                        log.info("findByTcisCode(1): " + importSettingRepository.findAllByTcisCode(getCellValue(cellL3)).toString());
+                        result.addError("ERR011_インポートファイルはインポート対象外です。（The import file is not in input list.）", "3");
+                    }
+                        else if (!importSettingRepository.findAllByTcisCode(getCellValue(cellL3)).toString().contains("PARTS_NAME"))
+                        {
+                            log.info("findByTcisCode(2): " + importSettingRepository.findAllByTcisCode(cellL3.toString()).toString());
+                            result.addError("ERR011_インポートファイルはインポート対象外です。（The import file is not in input list.）", "3");
+                        }
             } else {
                 result.addError("ERR011_インポートファイルはインポート対象外です。（The import file is not in input list.）", "3");
             }
@@ -322,9 +410,9 @@ public class ImportUploadErrorResource {
                 Cell cellN = row.getCell(13); // N列
                 if (
                     cellN != null &&
-                    !cellN.toString().trim().isEmpty() &&
-                    !cellN.toString().trim().equals("DEL") &&
-                    !cellN.toString().trim().equals("SS")
+                        !cellN.toString().trim().isEmpty() &&
+                        !cellN.toString().trim().equals("DEL") &&
+                        !cellN.toString().trim().equals("SS")
                 ) {
                     result.addError(
                         "ERR005_インポートファイルのOrCADパーツDB作成アプリ用フラグが不正です。（The import file's flag for the OrCAD parts database creation application is invalid.）",
@@ -342,6 +430,11 @@ public class ImportUploadErrorResource {
 
             return result;
         }
+//        catch (Exception e) {
+//            FileValidationResult result = new FileValidationResult();
+//            result.addError("インポート中、異常が発生しました。（An error occurred during the import process.）", "");
+//            return result;
+//        }
     }
 
     /**
@@ -398,7 +491,7 @@ public class ImportUploadErrorResource {
      * @param path 路径
      * @return {@link List}<{@link String}>
      */
-    private List<String> getFileNames(String path) {
+    public List<String> getFileNames(String path) {
         File file = new File(path);
         if (!file.exists()) {
             return null;
