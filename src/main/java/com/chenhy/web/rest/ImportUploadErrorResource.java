@@ -43,30 +43,6 @@ public class ImportUploadErrorResource {
     private final String uploadDirectory = "file";
 
     @Autowired
-    private ApplicationContext context;
-    private final Set<String> VALID_CLASSIFY_NAMES = loadValidClassifyNames();
-    private Set<String> loadValidClassifyNames() {
-        Set<String> names = new HashSet<>();
-
-        // 获取 com.chenhy.domain.commonEntity 包下的所有 Entity 类
-        String packageName = "com.chenhy.domain.commonEntity";
-        String[] beanNames = null;
-        if (context != null) {
-            beanNames = context.getBeanDefinitionNames();
-        }
-        if (beanNames != null) {
-            for (String beanName : beanNames) {
-                Class<?> beanClass = context.getType(beanName);
-                if (beanClass != null && beanClass.getPackageName().equals(packageName)) {
-                    names.add(beanClass.getSimpleName());
-                }
-            }
-        }
-        log.info("Found bean names for annotation @Entity: {}", Arrays.toString(beanNames));
-        return names;
-    }
-
-    @Autowired
     public ImportUploadErrorResource(
         ImportHistoryService importHistoryService,
         ImportHistoryDetailService importHistoryDetailService,
@@ -308,13 +284,15 @@ public class ImportUploadErrorResource {
             if (row3 != null) {
                 Cell cellE3 = row3.getCell(4); // E列
                 String classifyName = importProcessResource.convertAfterFirstUppercase(importProcessResource.getCellValueBeforeNewline(cellE3).replaceAll("[^a-zA-Z0-9]","_"));
+                String commonEntityPath = "src/main/java/com/chenhy/domain/commonEntity";
+                log.info("route: " + getFileNames(commonEntityPath));
                 if (cellE3 == null || cellE3.toString().trim().isEmpty()) {
                     result.addError(
                         "ERR010_インポートファイルの大分類はインポート対象外です。（The import file's classification code is not exists.）",
                         "3"
                     );
                 }
-                else if (!VALID_CLASSIFY_NAMES.contains(classifyName)) {
+                else if (!Objects.requireNonNull(getFileNames(commonEntityPath)).toString().contains(classifyName)) {
                     result.addError(
                         "ERR010_インポートファイルの大分類はインポート対象外です。（The import file's classification code is not exists.）",
                         "3"
@@ -412,5 +390,38 @@ public class ImportUploadErrorResource {
             case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
             default -> "";
         };
+    }
+
+    /**
+     * 得到文件名称
+     *
+     * @param path 路径
+     * @return {@link List}<{@link String}>
+     */
+    private List<String> getFileNames(String path) {
+        File file = new File(path);
+        if (!file.exists()) {
+            return null;
+        }
+        List<String> fileNames = new ArrayList<>();
+        return getFileNames(file, fileNames);
+    }
+    /**
+     * 得到文件名称
+     *
+     * @param file      文件
+     * @param fileNames 文件名
+     * @return {@link List}<{@link String}>
+     */
+    private List<String> getFileNames(File file, List<String> fileNames) {
+        File[] files = file.listFiles();
+        for (File f : files) {
+            if (f.isDirectory()) {
+                getFileNames(f, fileNames);
+            } else {
+                fileNames.add(f.getName());
+            }
+        }
+        return fileNames;
     }
 }
