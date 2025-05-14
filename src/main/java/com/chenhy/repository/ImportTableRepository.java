@@ -22,4 +22,7 @@ public interface ImportTableRepository extends JpaRepository<ImportTable, Long> 
     List<ImportTable> findByBCodeIn(List<String> ssSubBCodeList);
 
     List<ImportTable> findByPartNumber(@NotNull String partNumber);
+
+    List<ImportTable> findByBCodeContaining(String bCode);
+
 }

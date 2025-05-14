@@ -9,10 +9,13 @@ import com.chenhy.service.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import jakarta.annotation.PostConstruct;
 import org.apache.poi.ss.usermodel.*;
@@ -23,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -47,6 +51,7 @@ public class ImportProcessResource {
     private Sheet attributeSheet;
     private static final Map<String, Class<?>> repositoryClassCache = new HashMap<>();
     private static final Map<String, Class<?>> serviceClassCache = new HashMap<>();
+    private final String userName = getCurrentUsername();
 
     @PostConstruct
     public void init() throws IOException {
@@ -54,6 +59,21 @@ public class ImportProcessResource {
             Workbook attributeWorkbook = new XSSFWorkbook(fis);
             this.attributeSheet = attributeWorkbook.getSheetAt(0);
         }
+    }
+
+    /**
+     * 获取jhi当前用户名
+     * @return 用户名字符串
+     */
+    @PostConstruct
+    public String getCurrentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof String) {
+            return (String) authentication.getPrincipal();
+        } else if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+            return ((UserDetails) authentication.getPrincipal()).getUsername();
+        }
+        return null;
     }
 
     @Autowired
@@ -73,6 +93,7 @@ public class ImportProcessResource {
         this.applicationContext = applicationContext;
     }
 
+    @Async("taskExecutor")
     public void processAllFiles(Path filePath) {
         // 获取文件列表
         List<File> ssListFile = new ArrayList<>();
@@ -147,7 +168,7 @@ public class ImportProcessResource {
         try (FileInputStream fis = new FileInputStream(file)) {
             Workbook workbook = new XSSFWorkbook(fis);
             Sheet sheet = workbook.getSheetAt(1);
-            Row characteristicRow = workbook.getSheetAt(1).getRow(2);
+            Row characteristicRow = workbook.getSheetAt(1).getRow(4);
             String mattanName = getCellValue(sheet.getRow(2).getCell(11));
             String classifyName = convertAfterFirstUppercase(getCellValueBeforeNewline(sheet.getRow(2).getCell(4)).replaceAll("[^a-zA-Z0-9]","_")); // 从Excel获取表名（如"resistor_table"）
             log.info(classifyName);
@@ -179,155 +200,165 @@ public class ImportProcessResource {
                 Object repository = applicationContext.getBean(repositoryClass);
                 Object service = applicationContext.getBean(serviceClass);
 
-                // 遍历数据行
-                for (int rowIndex = 10; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                    Row row = sheet.getRow(rowIndex);
-                    if (row == null) continue;
+                // 遍历数据行 使用一半CPU
+                int availableProcessors = Runtime.getRuntime().availableProcessors();
+                ForkJoinPool customThreadPool = new ForkJoinPool(availableProcessors / 2); // 使用一半的CPU核心数
+                customThreadPool.submit(() -> IntStream.rangeClosed(10,sheet.getLastRowNum())
+                    .parallel()
+                    .forEach(rowIndex -> {
+                        try {
+                            Row row = sheet.getRow(rowIndex);
+                            if (row == null) return;
 
 
-                    if ("DEL".equals(getCellValue(row.getCell(13)))) {
-                        sheet.removeRow(row); // 物理删除
-                        String delBCode = getCellValue(row.getCell(28));
-                        if (delBCode != null && !delBCode.isEmpty()) {
-                            // 动态调用 findByBCode 方法
-                            java.lang.reflect.Method findMethod = repositoryClass.getMethod("findByBCode", String.class);
-                            Optional<?> existingTable = (Optional<?>) findMethod.invoke(repository, delBCode);
-                            if (existingTable.isPresent()) {
-                                // 动态调用 delete 方法
-                                java.lang.reflect.Method deleteMethod = serviceClass.getMethod("delete", Object.class);
-                                deleteMethod.invoke(service, existingTable.get());
+                            if ("DEL".equals(getCellValue(row.getCell(13)))) {
+                                sheet.removeRow(row); // 物理删除
+                                String delBCode = getCellValue(row.getCell(28));
+                                if (delBCode != null && !delBCode.isEmpty()) {
+                                    // 动态调用 findByBCode 方法
+                                    Method findMethod = repositoryClass.getMethod("findByBCode", String.class);
+                                    Optional<?> existingTable = (Optional<?>) findMethod.invoke(repository, delBCode);
+                                    if (existingTable.isPresent()) {
+                                        // 动态调用 delete 方法
+                                        Method deleteMethod = serviceClass.getMethod("delete", Object.class);
+                                        deleteMethod.invoke(service, existingTable.get());
+                                    }
+                                } // 实体数据删除
+                                return;
                             }
-                        } // 实体数据删除
-                        rowIndex--;
-                        continue;
-                    }
-                    // 获取 bCode 値
-                    String bCode = getCellValue(row.getCell(28));
-                    if (bCode == null || bCode.isEmpty()) continue;
-                    // 如果 bCode 为空，跳过当前行
-                    // 检查数据是否存在
-                    java.lang.reflect.Method findMethod = repositoryClass.getMethod("findByBCode", String.class);
-                    Optional<?> existingTable = (Optional<?>) findMethod.invoke(repository, bCode);
-                    Object importTable;
-                    if (existingTable.isPresent()) { // 如果数据已存在，更新该条记录
-                        importTable = existingTable.get();
-                        log.info("管理番号に従ってデータを更新中: " + bCode);
-                        // 动态设置更新信息
-                        java.lang.reflect.Method setUpdateByMethod = importTable.getClass().getMethod("setUpdateBy", String.class);
-                        setUpdateByMethod.invoke(importTable, getCurrentUsername());
-                        java.lang.reflect.Method setUpdateTimeMethod = importTable.getClass().getMethod("setUpdateTime", Instant.class);
-                        setUpdateTimeMethod.invoke(importTable, Instant.now());
-                    } else { // 如果数据不存在，创建新记录
-                        Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
-                        importTable = entityClass.getDeclaredConstructor().newInstance();
-                        log.info("管理番号から新しいデータを作成中: " + bCode);
+                            // 获取 bCode 値
+                            String bCode = getCellValue(row.getCell(28));
+                            if (bCode == null || bCode.isEmpty()) return;
+                            // 如果 bCode 为空，跳过当前行
+                            // 检查数据是否存在
+                            Method findMethod = repositoryClass.getMethod("findByBCode", String.class);
+                            Optional<?> existingTable = (Optional<?>) findMethod.invoke(repository, bCode);
+                            Object importTable;
 
-                        ImportTable remarkData = new ImportTable();
-                        remarkData.setId(UUID.randomUUID().toString());
-                        remarkData.setbCode(bCode + "*");
-                        remarkData.setPartNumber("mark");
-                        remarkData.setPartType("mark");
-                        remarkData.setRemark(classifyName);
-                        importTableService.save(remarkData);
-
-                        java.lang.reflect.Method setIdMethod = importTable.getClass().getMethod("setId", String.class);
-                        String uuid = UUID.randomUUID().toString();
-                        setIdMethod.invoke(importTable, uuid);
-                        java.lang.reflect.Method setPartTypeMethod = importTable.getClass().getMethod("setPartType", String.class);
-                        setPartTypeMethod.invoke(importTable, mattanName);
-                        java.lang.reflect.Method setCreateByMethod = importTable.getClass().getMethod("setCreateBy", String.class);
-                        setCreateByMethod.invoke(importTable, getCurrentUsername());
-                        java.lang.reflect.Method setCreateTimeMethod = importTable.getClass().getMethod("setCreateTime", Instant.class);
-                        setCreateTimeMethod.invoke(importTable, Instant.now());
-                        java.lang.reflect.Method setUpdateByMethod = importTable.getClass().getMethod("setUpdateBy", String.class);
-                        setUpdateByMethod.invoke(importTable, getCurrentUsername());
-                        java.lang.reflect.Method setUpdateTimeMethod = importTable.getClass().getMethod("setUpdateTime", Instant.class);
-                        setUpdateTimeMethod.invoke(importTable, Instant.now()); // 创建同时也是更新
-                        log.info("末端分類名: " + mattanName);
-                        int attributeRow = 0;
-                        attributeRow = findRow2(mattanName);
-                        log.info("属性項目対応表に対応行: Row" + attributeRow);
-
-                        setTableCharacter(importTable, row, "COMMON", "SCHEMATIC_PART");
-                        setTableCharacter(importTable, row, "COMMON", "PART_NUMBER");
-                        setTableCharacter(importTable, row, "COMMON", "MANUFACTURE");
-                        setTableCharacter(importTable, row, "COMMON", "B_CODE");
-                        setTableCharacter(importTable, row, "COMMON", "ITEM_REGISTRATION_CLASSFICATION");
-                        setTableCharacter(importTable, row, "COMMON", "SPICE_MODEL");
-                        setTableCharacter(importTable, row, "COMMON", "DEL");
-                        setTableCharacter(importTable, row, mattanName, "VALUE");
-                        setTableCharacter(importTable, row, mattanName, "CHARACTERISTICS");
-                        setTableCharacter(importTable, row, mattanName, "TOLERANCE");
-                        setTableCharacter(importTable, row, mattanName, "RATING_VOLTAGE");
-                        setTableCharacter(importTable, row, mattanName, "RATING_ELECTRICITY");
-                        setTableCharacter(importTable, row, mattanName, "SCHEMATIC_PART");
-                        setTableCharacter(importTable, row, mattanName, "PARTS_NAME");
-
-                        // 获取Schematic Part & Pcb FootPrint
-                        int LW = 0;
-                        if (mattanName.contains("コンデンサ") || mattanName.contains("抵抗器")) {
-                            String L = getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（代表値）")));
-                            String LM = getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK639)本体長さ（最大値）")));
-                            String W = getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（代表値）")));
-                            String WM = getCellValue(row.getCell(getCellPos(characteristicRow, "(XJK640)本体幅（最大値）")));
-                            if (!L.isEmpty() && !W.isEmpty()) {
-                                LW = (int) (Double.parseDouble(L) * 1000) + (int) (Double.parseDouble(W) * 10);
-                            } else if (!LM.isEmpty() && !WM.isEmpty()) {
-                                LW = (int) (Double.parseDouble(LM) * 1000) + (int) (Double.parseDouble(WM) * 10);
-                            } else if (!L.isEmpty() && !WM.isEmpty()) {
-                                LW = (int) (Double.parseDouble(L) * 1000) + (int) (Double.parseDouble(WM) * 10);
-                            } else if (!LM.isEmpty() && !W.isEmpty()) {
-                                LW = (int) (Double.parseDouble(LM) * 1000) + (int) (Double.parseDouble(W) * 10);
-                            } // 否则为初始值的0
-                        }
-                        java.lang.reflect.Method setSchematicPartMethod = importTable.getClass().getMethod("setSchematicPart", String.class);
-                        java.lang.reflect.Method setPcbFootPrintMethod = importTable.getClass().getMethod("setPcbFootPrint", String.class);
-                        if (mattanName.contains("電解コンデンサ")) {
-                            setSchematicPartMethod.invoke(importTable, "CE");
-
-                            if (
-                                getCellValue(row.getCell(getCellPos(characteristicRow, "(XJL582)実装方法※1"))).equals("基板挿入")
-                            ) setPcbFootPrintMethod.invoke(importTable, "CE_" + LW + "_DIP");
-                            else setPcbFootPrintMethod.invoke(importTable, "CE_" + LW);
-                        } else if (mattanName.contains("コンデンサ") && !mattanName.contains("電解コンデンサ")) {
-                            setSchematicPartMethod.invoke(importTable, "C");
-                            if (
-                                getCellValue(row.getCell(getCellPos(characteristicRow, "(XJL582)実装方法※1"))).equals("基板挿入")
-                            ) setPcbFootPrintMethod.invoke(importTable, "C_" + LW + "_DIP");
-                            else setPcbFootPrintMethod.invoke(importTable, "C_" + LW);
-                        } else if (mattanName.contains("固定抵抗器")) {
-                            setSchematicPartMethod.invoke(importTable, "R");
-                            if (
-                                getCellValue(row.getCell(getCellPos(characteristicRow, "(XJL582)実装方法※1"))).equals("基板挿入")
-                            ) setPcbFootPrintMethod.invoke(importTable, "R_" + LW + "_DIP");
-                            else setPcbFootPrintMethod.invoke(importTable, "R_" + LW);
-                        } else if (mattanName.contains("可変抵抗器")) {
-                            setSchematicPartMethod.invoke(importTable, "VR");
-                            if (
-                                getCellValue(row.getCell(getCellPos(characteristicRow, "(XJL582)実装方法※1"))).equals("基板挿入")
-                            ) setPcbFootPrintMethod.invoke(importTable, "VR_" + LW + "_DIP");
-                            else setPcbFootPrintMethod.invoke(importTable, "VR_" + LW);
-                        } else {
-                            if (getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）"))).equals("N/A")) {
-                                setSchematicPartMethod.invoke(importTable, getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE010)型番"))));
-                                setPcbFootPrintMethod.invoke(importTable, getCellValue(row.getCell(getCellPos(characteristicRow, "(XJE010)型番"))));
-                            } else {
-                                setSchematicPartMethod.invoke(importTable, getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）"))));
-                                setPcbFootPrintMethod.invoke(importTable, getCellValue(row.getCell(getCellPos(characteristicRow, "(APP078)型番（新）"))));
+                            List<ImportTable> existingImportTable = importTableRepository.findByBCodeContaining(bCode);
+                            ImportTable remarkData = existingImportTable.get(0);
+                            if (existingTable.isPresent()) { // 如果数据已存在，更新该条记录
+                                importTable = existingTable.get();
+                                log.info("管理番号に従ってデータを更新中: " + bCode);
+                                // 动态设置更新信息
+//                                java.lang.reflect.Method setUpdateByMethod = importTable.getClass().getMethod("setUpdateBy", String.class);
+//                                setUpdateByMethod.invoke(importTable, getCurrentUsername());
+//                                java.lang.reflect.Method setUpdateTimeMethod = importTable.getClass().getMethod("setUpdateTime", Instant.class);
+//                                setUpdateTimeMethod.invoke(importTable, Instant.now());
+                            } else { // 如果数据不存在，创建新记录
+                                Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
+                                importTable = entityClass.getDeclaredConstructor().newInstance();
+                                remarkData = new ImportTable();
+                                log.info("管理番号から新しいデータを作成中: " + bCode);
+                                setTableCharacter(importTable, row, "COMMON", "B_CODE");
                             }
-                        }
-                        if (LW == 0) {
-                            setPcbFootPrintMethod.invoke(importTable, "");
-                            setTableCharacter(importTable, row, mattanName, "PACKAGE_TYPE");
-                        }
-                    }
-                    // 保存或更新记录
-                    Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
-                    java.lang.reflect.Method saveMethod = serviceClass.getMethod("save", entityClass);
-                    saveMethod.invoke(service, importTable);
+                                remarkData.setId(UUID.randomUUID().toString());
+                                remarkData.setbCode(bCode + "-" + Instant.now().toString());
+                                remarkData.setPartNumber("mark");
+                                remarkData.setPartType("mark");
+                                remarkData.setRemark(classifyName);
+                                importTableService.save(remarkData);
 
-                    CURRENT_TABLE_NAME.remove();
-                }
+                                Method setIdMethod = importTable.getClass().getMethod("setId", String.class);
+                                String uuid = UUID.randomUUID().toString();
+                                setIdMethod.invoke(importTable, uuid);
+                                Method setPartTypeMethod = importTable.getClass().getMethod("setPartType", String.class);
+                                setPartTypeMethod.invoke(importTable, mattanName);
+                                Method setCreateByMethod = importTable.getClass().getMethod("setCreateBy", String.class);
+                                setCreateByMethod.invoke(importTable, userName);
+                                Method setCreateTimeMethod = importTable.getClass().getMethod("setCreateTime", Instant.class);
+                                setCreateTimeMethod.invoke(importTable, Instant.now());
+                                Method setUpdateByMethod = importTable.getClass().getMethod("setUpdateBy", String.class);
+                                setUpdateByMethod.invoke(importTable, userName);
+                                Method setUpdateTimeMethod = importTable.getClass().getMethod("setUpdateTime", Instant.class);
+                                setUpdateTimeMethod.invoke(importTable, Instant.now()); // 创建同时也是更新
+                                log.info("末端分類名: " + mattanName);
+                                int attributeRow = 0;
+                                attributeRow = findRow2(mattanName);
+                                log.info("属性項目対応表に対応行: Row" + attributeRow);
+
+                                setTableCharacter(importTable, row, "COMMON", "SCHEMATIC_PART");
+                                setTableCharacter(importTable, row, "COMMON", "PART_NUMBER");
+                                setTableCharacter(importTable, row, "COMMON", "MANUFACTURE");
+                                setTableCharacter(importTable, row, "COMMON", "ITEM_REGISTRATION_CLASSFICATION");
+                                setTableCharacter(importTable, row, "COMMON", "SPICE_MODEL");
+                                setTableCharacter(importTable, row, "COMMON", "DEL");
+                                setTableCharacter(importTable, row, mattanName, "VALUE");
+                                setTableCharacter(importTable, row, mattanName, "CHARACTERISTICS");
+                                setTableCharacter(importTable, row, mattanName, "TOLERANCE");
+                                setTableCharacter(importTable, row, mattanName, "RATING_VOLTAGE");
+                                setTableCharacter(importTable, row, mattanName, "RATING_ELECTRICITY");
+                                setTableCharacter(importTable, row, mattanName, "SCHEMATIC_PART");
+                                setTableCharacter(importTable, row, mattanName, "PARTS_NAME");
+
+                                // 获取Schematic Part & Pcb FootPrint
+                                int LW = 0;
+                                if (mattanName.contains("コンデンサ") || mattanName.contains("抵抗器")) {
+                                    String L = getCellValue(row.getCell(getCellPos(characteristicRow, "Body_length_Typ")));
+                                    String LM = getCellValue(row.getCell(getCellPos(characteristicRow, "Body_length_Max")));
+                                    String W = getCellValue(row.getCell(getCellPos(characteristicRow, "Body_breadth_Typ")));
+                                    String WM = getCellValue(row.getCell(getCellPos(characteristicRow, "Body_breadth_Max")));
+                                    if (!L.isEmpty() && !W.isEmpty()) {
+                                        LW = (int) (Double.parseDouble(L) * 1000) + (int) (Double.parseDouble(W) * 10);
+                                    } else if (!LM.isEmpty() && !WM.isEmpty()) {
+                                        LW = (int) (Double.parseDouble(LM) * 1000) + (int) (Double.parseDouble(WM) * 10);
+                                    } else if (!L.isEmpty() && !WM.isEmpty()) {
+                                        LW = (int) (Double.parseDouble(L) * 1000) + (int) (Double.parseDouble(WM) * 10);
+                                    } else if (!LM.isEmpty() && !W.isEmpty()) {
+                                        LW = (int) (Double.parseDouble(LM) * 1000) + (int) (Double.parseDouble(W) * 10);
+                                    } // 否则为初始值的0
+                                }
+                                Method setSchematicPartMethod = importTable.getClass().getMethod("setSchematicPart", String.class);
+                                Method setPcbFootPrintMethod = importTable.getClass().getMethod("setPcbFootPrint", String.class);
+                                if (mattanName.contains("電解コンデンサ")) {
+                                    setSchematicPartMethod.invoke(importTable, "CE");
+
+                                    if (
+                                        getCellValue(row.getCell(getCellPos(characteristicRow, "Mount_method"))).equals("基板挿入")
+                                    ) setPcbFootPrintMethod.invoke(importTable, "CE_" + LW + "_DIP");
+                                    else setPcbFootPrintMethod.invoke(importTable, "CE_" + LW);
+                                } else if (mattanName.contains("コンデンサ") && !mattanName.contains("電解コンデンサ")) {
+                                    setSchematicPartMethod.invoke(importTable, "C");
+                                    if (
+                                        getCellValue(row.getCell(getCellPos(characteristicRow, "Mount_method"))).equals("基板挿入")
+                                    ) setPcbFootPrintMethod.invoke(importTable, "C_" + LW + "_DIP");
+                                    else setPcbFootPrintMethod.invoke(importTable, "C_" + LW);
+                                } else if (mattanName.contains("固定抵抗器")) {
+                                    setSchematicPartMethod.invoke(importTable, "R");
+                                    if (
+                                        getCellValue(row.getCell(getCellPos(characteristicRow, "Mount_method"))).equals("基板挿入")
+                                    ) setPcbFootPrintMethod.invoke(importTable, "R_" + LW + "_DIP");
+                                    else setPcbFootPrintMethod.invoke(importTable, "R_" + LW);
+                                } else if (mattanName.contains("可変抵抗器")) {
+                                    setSchematicPartMethod.invoke(importTable, "VR");
+                                    if (
+                                        getCellValue(row.getCell(getCellPos(characteristicRow, "Mount_method"))).equals("基板挿入")
+                                    ) setPcbFootPrintMethod.invoke(importTable, "VR_" + LW + "_DIP");
+                                    else setPcbFootPrintMethod.invoke(importTable, "VR_" + LW);
+                                } else {
+                                    if (getCellValue(row.getCell(getCellPos(characteristicRow, "Type_no_new"))).equals("N/A")) {
+                                        setSchematicPartMethod.invoke(importTable, getCellValue(row.getCell(getCellPos(characteristicRow, "Type_no"))));
+                                        setPcbFootPrintMethod.invoke(importTable, getCellValue(row.getCell(getCellPos(characteristicRow, "Type_no"))));
+                                    } else {
+                                        setSchematicPartMethod.invoke(importTable, getCellValue(row.getCell(getCellPos(characteristicRow, "Type_no_new"))));
+                                        setPcbFootPrintMethod.invoke(importTable, getCellValue(row.getCell(getCellPos(characteristicRow, "Type_no_new"))));
+                                    }
+                                }
+                                if (LW == 0) {
+                                    setPcbFootPrintMethod.invoke(importTable, "");
+                                    setTableCharacter(importTable, row, mattanName, "PACKAGE_TYPE");
+                                }
+
+                            // 保存或更新记录
+                            Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
+                            Method saveMethod = serviceClass.getMethod("save", entityClass);
+                            saveMethod.invoke(service, importTable);
+
+                            CURRENT_TABLE_NAME.remove();
+                        } catch (Exception e) {
+                            log.error(e.getMessage());
+                        }
+                    })).join();
             } catch (Exception e) {
                 log.error(e.getMessage());
                 log.error("{} は既に使われていません。" ,classifyName);
@@ -341,6 +372,7 @@ public class ImportProcessResource {
         log.info("SSリストファイル処理中:" + file.getName());
         sSImportRepository.deleteAll(); // 删除 ssImport 临时数据库的所有数据
         // ss清单文件处理
+        String userName = getCurrentUsername();
         try (FileInputStream fis = new FileInputStream(file)) {
             Workbook ssworkbook = new XSSFWorkbook(fis);
             Sheet sheetSs = ssworkbook.getSheetAt(0); // 获取第一个工作表
@@ -363,11 +395,11 @@ public class ImportProcessResource {
                         ssImport.setUuid(uuid);
                         ssImport.setSsBCode(getCellValue(row.getCell(0)));
                         ssImport.setSsSubBCode(getCellValue(sheetSs.getRow(rowIndex + 1).getCell(1)));
-                        ssImport.setSsCreateBy(getCurrentUsername());
+                        ssImport.setSsCreateBy(userName);
                         ssImport.setSsFilename(getCellValue(row.getCell(2))); //写的是文件名，但是获取不到
-                        ssImport.setCreateBy(getCurrentUsername());
+                        ssImport.setCreateBy(userName);
                         ssImport.setCreateTime(Instant.now());
-                        ssImport.setUpdateBy(getCurrentUsername());
+                        ssImport.setUpdateBy(userName);
                         ssImport.setUpdateTime(Instant.now());
                         ssImport.setDelFlag(true);
                         log.info("SS親部品新規作成中: " + getCellValue(row.getCell(0)));
@@ -385,11 +417,11 @@ public class ImportProcessResource {
                         break;
                     }
                     ssImport.setSsSubBCode(getCellValue(row.getCell(1)));
-                    ssImport.setSsCreateBy(getCurrentUsername());
+                    ssImport.setSsCreateBy(userName);
                     ssImport.setSsFilename(getCellValue(row.getCell(2))); // 写的是文件名，但是获取不到
-                    ssImport.setCreateBy(getCurrentUsername());
+                    ssImport.setCreateBy(userName);
                     ssImport.setCreateTime(Instant.now());
-                    ssImport.setUpdateBy(getCurrentUsername());
+                    ssImport.setUpdateBy(userName);
                     ssImport.setUpdateTime(Instant.now());
                     ssImport.setDelFlag(true);
                     log.info("SS子部品新規作成中: " + getCellValue(row.getCell(1)));
@@ -465,6 +497,7 @@ public class ImportProcessResource {
                     }
                 }
             }
+            log.info("findRow2 throw E");
         return -1;
     }
 
@@ -489,6 +522,7 @@ public class ImportProcessResource {
                 }
             }
         }
+        log.info("getCellPos throw E: {}",searchString);
         return -1;
     }
 
@@ -523,7 +557,7 @@ public class ImportProcessResource {
                     if(settingCharacter2.equals("DEL"))
                     {
                         methodName = "setDelFlag";
-                        java.lang.reflect.Method setterMethod = importTable.getClass().getMethod(methodName, Boolean.class);
+                        Method setterMethod = importTable.getClass().getMethod(methodName, Boolean.class);
                         setterMethod.invoke(importTable, true);
                     }
                     if(settingCharacter2.equals("B_CODE"))
@@ -532,7 +566,7 @@ public class ImportProcessResource {
                         methodName = "setPcbFootPrint";
                     if(!settingCharacter2.equals("DEL"))
                     {
-                        java.lang.reflect.Method setterMethod = importTable.getClass().getMethod(methodName, String.class);
+                        Method setterMethod = importTable.getClass().getMethod(methodName, String.class);
                         String value = getComplexCellValue(row, cvt(tcisIncol));
                         // 特殊处理逻辑
                         if ("PART_NUMBER".equals(settingCharacter2) || "MANUFACTURE".equals(settingCharacter2)) {
@@ -542,7 +576,7 @@ public class ImportProcessResource {
                                 setterMethod.invoke(importTable, getCellValue(row.getCell(Integer.parseInt(cvt(tcisIncol)) + 1)));
                             }
                         } else if ("DEL".equals(settingCharacter2)) {
-                            java.lang.reflect.Method setDelFlagMethod = importTable.getClass().getMethod("setDelFlag", boolean.class);
+                            Method setDelFlagMethod = importTable.getClass().getMethod("setDelFlag", boolean.class);
                             if (value.isEmpty()) {
                                 setDelFlagMethod.invoke(importTable, true);
                             } else if (value.equals("DEL")) {
@@ -564,12 +598,12 @@ public class ImportProcessResource {
                     if(settingCharacter2.equals("DEL"))
                     {
                         methodName = "setDelFlag";
-                        java.lang.reflect.Method setterMethod = importTable.getClass().getMethod(methodName, Boolean.class);
+                        Method setterMethod = importTable.getClass().getMethod(methodName, Boolean.class);
                         setterMethod.invoke(importTable, true);
                     }
                     if(!settingCharacter2.equals("DEL"))
                     {
-                        java.lang.reflect.Method setterMethod = importTable.getClass().getMethod(methodName, String.class);
+                        Method setterMethod = importTable.getClass().getMethod(methodName, String.class);
                         setterMethod.invoke(importTable, tcisEditrule);
                     }
                 }
@@ -672,60 +706,56 @@ public class ImportProcessResource {
             SSImport next = ssImports.get(i + 1);
 
             if (current.getSsSubBCode() != null && current.getSsSubBCode().equals(next.getSsSubBCode())) {
-                ssSubBCodeMap.computeIfAbsent(current.getSsSubBCode() + "*", k -> new ArrayList<>()).add(current);
+                ssSubBCodeMap.computeIfAbsent(current.getSsSubBCode(), k -> new ArrayList<>()).add(current);
             }
         }
         /// //////////////////////////////////////////////////
-        // 检查这些编号是否存在于 ImportTable 数据库中
+        // 模糊检查这些编号是否存在于 ImportTable 数据库中
         List<String> ssSubBCodeList = new ArrayList<>(ssSubBCodeMap.keySet());
-        List<ImportTable> matchingImportTables = importTableRepository.findByBCodeIn(ssSubBCodeList);
-        // 如果存在对应的管理编号
-        for (ImportTable importTable : matchingImportTables) {
-            String ssSubBCode = importTable.getbCode();
-            List<SSImport> ssImportsWithMatchingSubBCode = ssSubBCodeMap.get(ssSubBCode);
-            for (SSImport ssImport : ssImportsWithMatchingSubBCode) {
-                // 生成一条新的 importTable 数据，这条数据的 bCode 字段为 ssImport 数据的 ssBCode，其他均与找到的 importTable 数据相同
-                ImportTable newImportTable = new ImportTable();
-                newImportTable.setId(UUID.randomUUID().toString());
-                newImportTable.setbCode(ssImport.getSsBCode());
-                newImportTable.setPartNumber("-");
-                newImportTable.setManufacture(importTable.getManufacture());
-                newImportTable.setCreateBy(importTable.getCreateBy());
-                newImportTable.setCreateTime(importTable.getCreateTime());
-                newImportTable.setUpdateBy(getCurrentUsername());
-                newImportTable.setUpdateTime(Instant.now());
-                newImportTable.setDelFlag(importTable.getDelFlag());
-                newImportTable.setItemRegistrationClassification(importTable.getItemRegistrationClassification());
-                newImportTable.setSpiceModel(importTable.getSpiceModel());
-                newImportTable.setValue(importTable.getValue());
-                newImportTable.setPartType(importTable.getPartType());
-                newImportTable.setTolerance(importTable.getTolerance());
-                newImportTable.setRatingVoltage(importTable.getRatingVoltage());
-                newImportTable.setCharacteristics(importTable.getCharacteristics());
-                newImportTable.setRatingElectricity(importTable.getRatingElectricity());
-                newImportTable.setSchematicPart(importTable.getSchematicPart());
-                newImportTable.setPcbFootPrint(importTable.getPcbFootPrint());
-                newImportTable.setPartsName(importTable.getPartsName());
+        List<ImportTable> matchingImportTables = new ArrayList<>();
 
-                importTableService.save(newImportTable);
-                log.info("新しい SS データがインポートテーブルに作成されました: " + newImportTable.getbCode());
+        for (String ssSubBCode : ssSubBCodeList) {
+            List<ImportTable> matches = importTableRepository.findByBCodeContaining(ssSubBCode);
+            if (matches != null && !matches.isEmpty()) {
+                matchingImportTables.addAll(matches);
             }
         }
+
+        // 如果存在对应的管理编号
+        log.info("find: {}",matchingImportTables.toString());
+//        for (ImportTable importTable : matchingImportTables) {
+//            String ssSubBCode = importTable.getbCode();
+//            List<SSImport> ssImportsWithMatchingSubBCode = ssSubBCodeMap.get(ssSubBCode);
+//            for (SSImport ssImport : ssImportsWithMatchingSubBCode) {
+//                // 生成一条新的 importTable 数据，这条数据的 bCode 字段为 ssImport 数据的 ssBCode，其他均与找到的 importTable 数据相同
+//                ImportTable newImportTable = new ImportTable();
+//                newImportTable.setId(UUID.randomUUID().toString());
+//                newImportTable.setbCode(ssImport.getSsBCode());
+//                newImportTable.setPartNumber("-");
+//                newImportTable.setManufacture(importTable.getManufacture());
+//                newImportTable.setCreateBy(importTable.getCreateBy());
+//                newImportTable.setCreateTime(importTable.getCreateTime());
+//                newImportTable.setUpdateBy(userName);
+//                newImportTable.setUpdateTime(Instant.now());
+//                newImportTable.setDelFlag(importTable.getDelFlag());
+//                newImportTable.setItemRegistrationClassification(importTable.getItemRegistrationClassification());
+//                newImportTable.setSpiceModel(importTable.getSpiceModel());
+//                newImportTable.setValue(importTable.getValue());
+//                newImportTable.setPartType(importTable.getPartType());
+//                newImportTable.setTolerance(importTable.getTolerance());
+//                newImportTable.setRatingVoltage(importTable.getRatingVoltage());
+//                newImportTable.setCharacteristics(importTable.getCharacteristics());
+//                newImportTable.setRatingElectricity(importTable.getRatingElectricity());
+//                newImportTable.setSchematicPart(importTable.getSchematicPart());
+//                newImportTable.setPcbFootPrint(importTable.getPcbFootPrint());
+//                newImportTable.setPartsName(importTable.getPartsName());
+//
+//                importTableService.save(newImportTable);
+//                log.info("新しい SS データがインポートテーブルに作成されました: " + newImportTable.getbCode());
+//            }
+//        }
     }
 
-    /**
-     * 获取jhi当前用户名
-     * @return 用户名字符串
-     */
-    public String getCurrentUsername() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof String) {
-            return (String) authentication.getPrincipal();
-        } else if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
-            return ((UserDetails) authentication.getPrincipal()).getUsername();
-        }
-        return null;
-    }
 
     /**
      * 将字符串第一个大写字母后的所有大写字母转为小写，每一个下划线后的第一个字母也要大写用于根据大分类名称动态调用方法

@@ -7,12 +7,13 @@ import com.chenhy.repository.ImportTableRepository;
 import com.chenhy.service.ImportHistoryDetailService;
 import com.chenhy.service.ImportHistoryService;
 import io.micrometer.common.util.StringUtils;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.*;
 import jakarta.persistence.*;
@@ -25,6 +26,7 @@ import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -46,6 +48,7 @@ public class ImportUploadErrorResource {
 
     private final ApplicationContext applicationContext;
     private final String uploadDirectory = "file";
+    private final Map<String, String> processedFileHashes = new HashMap<>();
 
     @Autowired
     public ImportUploadErrorResource(
@@ -108,6 +111,14 @@ public class ImportUploadErrorResource {
             Files.copy(file.getInputStream(), targetLocation);
             // 检查文件内容
             FileValidationResult validationResult = validateExcelFile(targetLocation.toString());
+
+//            byte[] fileBytes = file.getBytes();
+//            try (InputStream is = new ByteArrayInputStream(fileBytes);
+//                 Workbook workbook = new XSSFWorkbook(is)) {
+//                // 直接验证内存中的Excel文件
+//                FileValidationResult validationResult = validateExcelWorkbook(workbook);
+//                // ... rest of the logic
+//            }
             // 创建importHistory记录
             ImportHistory importHistory = new ImportHistory();
             importHistory.setUuid(uuid);
@@ -198,6 +209,27 @@ public class ImportUploadErrorResource {
     }
 
     private FileValidationResult validateExcelFile(String filePath) throws IOException {
+        try {
+            File file = new File(filePath);
+            FileValidationResult result = new FileValidationResult();
+            String currentHash = calculateFileHash(file);
+
+            // 检查是否已处理过该文件且内容未变
+            if (processedFileHashes.containsKey(file.getAbsolutePath()) &&
+                processedFileHashes.get(file.getAbsolutePath()).equals(currentHash)) {
+                log.info("文件内容未变化，跳过处理: {}", file.getName());
+                return result;
+            }
+
+            // 正常处理文件...
+            log.info("正在处理文件: {}", file.getName());
+
+            // 处理完成后更新哈希值
+            processedFileHashes.put(file.getAbsolutePath(), currentHash);
+
+        } catch (Exception e) {
+            log.error("文件哈希计算失败或处理异常", e);
+        }
         try (FileInputStream fis = new FileInputStream(filePath); Workbook workbook = new XSSFWorkbook(fis)) {
             FileValidationResult result = new FileValidationResult();
 
@@ -516,5 +548,30 @@ public class ImportUploadErrorResource {
             }
         }
         return fileNames;
+    }
+
+    /**
+     * 计算文件的哈希值
+     *
+     * @param file 文件
+     * @return 文件哈希值
+     * @throws IOException               IO异常
+     * @throws NoSuchAlgorithmException  没有此算法异常
+     */
+    private String calculateFileHash(File file) throws IOException, NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] byteArray = new byte[1024];
+            int bytesCount;
+            while ((bytesCount = fis.read(byteArray)) != -1) {
+                digest.update(byteArray, 0, bytesCount);
+            }
+        }
+        byte[] hashBytes = digest.digest();
+        StringBuilder sb = new StringBuilder();
+        for (byte b : hashBytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 }
