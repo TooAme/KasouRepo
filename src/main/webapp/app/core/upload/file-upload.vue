@@ -130,6 +130,14 @@ export default defineComponent({
             message: `全部${successFiles.length}個のファイルがアップロードされました`,
           };
           this.selectedFiles = []; // 清空已选择文件列表
+          try {
+            await apiClient.post('/import/process-all-files');
+          } catch (error) {
+            this.uploadStatus = {
+              type: 'error',
+              message: 'ファイル処理中にエラーが発生しました：' + (error.message || '未知のエラー'),
+            };
+          }
         } else if (successFiles.length === 0) {
           this.uploadStatus = {
             type: 'error',
@@ -308,7 +316,8 @@ h4 {
 
 .upload-status {
   margin-top: 12px;
-  padding: 12px;
+  padding: 10px;
+  margin-right: 548px;
   border-radius: 4px;
   display: flex;
   justify-content: space-between;

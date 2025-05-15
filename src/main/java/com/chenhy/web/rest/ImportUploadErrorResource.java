@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
 import jakarta.persistence.*;
@@ -25,10 +26,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.EncodedResource;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import javax.sql.DataSource;
 
 /**
  * REST controller for managing file imports.
@@ -145,11 +152,11 @@ public class ImportUploadErrorResource {
                 importHistoryDetailService.save(detail);
 
                 if (validationResult.isSsListFlag()) {
-                    importProcessResource.injectSSIntoImportTable();
-                    importProcessResource.processAllFiles(targetLocation);
+//                    importProcessResource.injectSSIntoImportTable();
+//                    importProcessResource.processAllFiles(targetLocation);
                 } else Files.deleteIfExists(targetLocation); // 物理删除上传的文件
             } else {
-                importProcessResource.processAllFiles(targetLocation);
+                //importProcessResource.processAllFiles(targetLocation);
             }
 
             response.put("success", true);
@@ -163,6 +170,11 @@ public class ImportUploadErrorResource {
             response.put("message", "ファイル処理プロセス中にエラーが発生しました: " + e.getMessage());
             return ResponseEntity.badRequest().body(response);
         }
+    }
+
+    @PostMapping("/import/process-all-files")
+    public void processUploadedFiles() {
+        importProcessResource.processAllFiles();
     }
 
     private static class FileValidationResult {

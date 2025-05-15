@@ -11,6 +11,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
@@ -51,7 +52,7 @@ public class ImportProcessResource {
     private Sheet attributeSheet;
     private static final Map<String, Class<?>> repositoryClassCache = new HashMap<>();
     private static final Map<String, Class<?>> serviceClassCache = new HashMap<>();
-    private final String userName = getCurrentUsername();
+    private static final String userName = getCurrentUsername();
     private final Object lock = new Object();
 
     @PostConstruct
@@ -67,7 +68,7 @@ public class ImportProcessResource {
      * @return 用户名字符串
      */
     @PostConstruct
-    public String getCurrentUsername() {
+    public static String getCurrentUsername() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof String) {
             return (String) authentication.getPrincipal();
@@ -94,13 +95,15 @@ public class ImportProcessResource {
         this.applicationContext = applicationContext;
     }
 
-    @Async("taskExecutor")
-    public void processAllFiles(Path filePath) {
+    public void processAllFiles() {
         // 获取文件列表
         List<File> ssListFile = new ArrayList<>();
         List<File> normalFile = new ArrayList<>();
 
-        File directory = filePath != null ? new File(String.valueOf(filePath.getParent())) : null;
+        String pathString = "file";
+        // 使用 Paths.get 方法将路径字符串转换为 Path 对象
+        java.nio.file.Path directoryPath = Paths.get(pathString);
+        File directory = directoryPath.toFile();
         File[] files = directory != null ? directory.listFiles((dir, name) -> name != null && name.toLowerCase().endsWith(".xlsx")) : null;
 
         if (files != null) {
@@ -139,6 +142,8 @@ public class ImportProcessResource {
 //        }
 //        log.info("partNumber が '-' の ImportTable データが削除されました。");
 
+        //deleteAllPartNumberDashEntities(); //这个方法的delete没有进行空指针异常处理
+
         for (File file : normalFile) {
             if (processedFiles.contains(file.getAbsolutePath())) {
                 log.info("処理済み单品ファイル、スキップします: " + file.getName());
@@ -146,7 +151,6 @@ public class ImportProcessResource {
                 continue;
             }
             processNormalFile(file);
-            injectSSIntoImportTable();
             processedFiles.add(file.getAbsolutePath());
         }
         for (File file : ssListFile) {
@@ -156,12 +160,13 @@ public class ImportProcessResource {
                 continue;
             }
             processSsListFile(file);
-            injectSSIntoImportTable();
             processedFiles.add(file.getAbsolutePath());
         }
+        injectSSIntoImportTable();
     }
 
-    private void processNormalFile(File file) {
+    //@Async("taskExecutor")
+    public void processNormalFile(File file) {
         if (file == null) return;
         log.info("普通単品ファイルの取り扱いでいます: " + file.getName());
 
@@ -378,7 +383,7 @@ public class ImportProcessResource {
         }
     }
 
-    private void processSsListFile(File file) {
+    public void processSsListFile(File file) {
         log.info("SSリストファイル処理中:" + file.getName());
         sSImportRepository.deleteAll(); // 删除 ssImport 临时数据库的所有数据
         // ss清单文件处理
@@ -711,6 +716,8 @@ public class ImportProcessResource {
         log.info("SSインポートテーブルに子部品が存在するSS親部品をインポートテーブルに注入します...");
         List<SSImport> ssImports = sSImportRepository.findAll();
         Map<String, List<SSImport>> ssSubBCodeMap = new HashMap<>();
+
+        // 1. 分组处理SSImport数据
         for (int i = 0; i < ssImports.size() - 1; i++) {
             SSImport current = ssImports.get(i);
             SSImport next = ssImports.get(i + 1);
@@ -719,53 +726,128 @@ public class ImportProcessResource {
                 ssSubBCodeMap.computeIfAbsent(current.getSsSubBCode(), k -> new ArrayList<>()).add(current);
             }
         }
-        /// //////////////////////////////////////////////////
-        // 模糊检查这些编号是否存在于 ImportTable 数据库中
-        List<String> ssSubBCodeList = new ArrayList<>(ssSubBCodeMap.keySet());
-        List<ImportTable> matchingImportTables = new ArrayList<>();
 
-        for (String ssSubBCode : ssSubBCodeList) {
-            List<ImportTable> matches = importTableRepository.findByBCodeContaining(ssSubBCode);
-            if (matches != null && !matches.isEmpty()) {
-                matchingImportTables.addAll(matches);
+        // 2. 处理每个匹配的SS子部品
+        for (String ssSubBCode : ssSubBCodeMap.keySet()) {
+            List<ImportTable> sourceTables = importTableRepository.findByBCodeContaining(ssSubBCode);
+            if (sourceTables.isEmpty()) continue;
+
+            for (ImportTable sourceTable : sourceTables) {
+                String classifyName = sourceTable.getRemark();
+                if (classifyName == null || classifyName.isEmpty()) continue;
+
+                try {
+                    // 3. 动态获取repository和service
+                    Class<?> repositoryClass = repositoryClassCache.computeIfAbsent(classifyName, k -> {
+                        try {
+                            return Class.forName("com.chenhy.repository.commonEntity." + classifyName + "Repository");
+                        } catch (ClassNotFoundException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+
+                    Class<?> serviceClass = serviceClassCache.computeIfAbsent(classifyName, k -> {
+                        try {
+                            return Class.forName("com.chenhy.service.impl.commonEntity." + classifyName + "ServiceImpl");
+                        } catch (ClassNotFoundException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+
+                    Object repository = applicationContext.getBean(repositoryClass);
+                    Object service = applicationContext.getBean(serviceClass);
+
+                    // 4. 查找原始实体数据
+                    Method findMethod = repositoryClass.getMethod("findByBCode", String.class);
+                    Optional<?> originalEntityOpt = (Optional<?>) findMethod.invoke(repository, sourceTable.getbCode().substring(0, sourceTable.getbCode().indexOf("-", sourceTable.getbCode().indexOf("-") + 1)));
+
+                    if (!originalEntityOpt.isPresent()) continue;
+                    Object originalEntity = originalEntityOpt.get();
+
+                    // 5. 处理每个SS亲部品
+                    for (SSImport ssImport : ssSubBCodeMap.get(ssSubBCode)) {
+                        // 检查是否已存在相同的SS亲部品数据
+                        Optional<?> existingSSEntityOpt = (Optional<?>) findMethod.invoke(repository, ssImport.getSsBCode());
+                        if (existingSSEntityOpt.isPresent()) {
+                            log.info("SS親部品データは既に存在します。スキップします: {}", ssImport.getSsBCode());
+                            continue;
+                        }
+
+                        // 6. 创建新的实体实例
+                        Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
+                        Object newEntity = entityClass.getDeclaredConstructor().newInstance();
+
+                        // 设置ID
+                        Method setIdMethod = entityClass.getMethod("setId", String.class);
+                        setIdMethod.invoke(newEntity, UUID.randomUUID().toString());
+
+                    Method setPartNumberMethod = entityClass.getMethod("setPartNumber", String.class);
+                    setPartNumberMethod.invoke(newEntity, "-");
+
+                    // 复制其他字段
+                    Method[] methods = entityClass.getMethods();
+                    for (Method getterMethod : methods) {
+                        if (getterMethod.getName().startsWith("get") &&
+                            !getterMethod.getName().equals("getId") &&
+                            !getterMethod.getName().equals("getbCode") &&
+                            !getterMethod.getName().equals("getPartNumber")){
+
+                                String setterName = getterMethod.getName().replaceFirst("get", "set");
+                                try {
+                                    Method setterMethod = entityClass.getMethod(setterName, getterMethod.getReturnType());
+                                    Object value = getterMethod.invoke(originalEntity);
+                                    setterMethod.invoke(newEntity, value);
+                                } catch (NoSuchMethodException e) {
+                                    // 忽略没有setter方法的字段
+                                }
+                            }
+                        }
+
+                        // 设置bCode为SS亲部品编号
+                        Method setBCodeMethod = entityClass.getMethod("setbCode", String.class);
+                        setBCodeMethod.invoke(newEntity, ssImport.getSsBCode());
+
+                        // 设置审计字段
+                        Method setCreateByMethod = entityClass.getMethod("setCreateBy", String.class);
+                        setCreateByMethod.invoke(newEntity, userName);
+
+                        Method setCreateTimeMethod = entityClass.getMethod("setCreateTime", Instant.class);
+                        setCreateTimeMethod.invoke(newEntity, Instant.now());
+
+                        Method setUpdateByMethod = entityClass.getMethod("setUpdateBy", String.class);
+                        setUpdateByMethod.invoke(newEntity, userName);
+
+                        Method setUpdateTimeMethod = entityClass.getMethod("setUpdateTime", Instant.class);
+                        setUpdateTimeMethod.invoke(newEntity, Instant.now());
+
+                        // 7. 保存新记录
+                        Method saveMethod = serviceClass.getMethod("save", entityClass);
+                        saveMethod.invoke(service, newEntity);
+
+                        // 8. 检查并创建对应的ImportTable记录
+//                        List<ImportTable> existingImportTables = importTableRepository.findByBCode(ssImport.getSsBCode());
+//                        if (existingImportTables.isEmpty()) {
+//                            ImportTable newImportTable = new ImportTable();
+//                            newImportTable.setId(UUID.randomUUID().toString());
+//                            newImportTable.setbCode(ssImport.getSsBCode());
+//                            newImportTable.setPartNumber("-");
+//                            newImportTable.setRemark(classifyName);
+//                            newImportTable.setCreateBy(userName);
+//                            newImportTable.setCreateTime(Instant.now());
+//                            newImportTable.setUpdateBy(userName);
+//                            newImportTable.setUpdateTime(Instant.now());
+//                            importTableService.save(newImportTable);
+//                        }
+
+                        log.info("新しい SS データが作成されました: {}", ssImport.getSsBCode());
+                    }
+
+                } catch (Exception e) {
+                    log.error("SSデータの動的作成に失敗しました: {}", e.getMessage(), e);
+                }
             }
         }
-
-        // 如果存在对应的管理编号
-        log.info("find: {}",matchingImportTables.toString());
-//        for (ImportTable importTable : matchingImportTables) {
-//            String ssSubBCode = importTable.getbCode();
-//            List<SSImport> ssImportsWithMatchingSubBCode = ssSubBCodeMap.get(ssSubBCode);
-//            for (SSImport ssImport : ssImportsWithMatchingSubBCode) {
-//                // 生成一条新的 importTable 数据，这条数据的 bCode 字段为 ssImport 数据的 ssBCode，其他均与找到的 importTable 数据相同
-//                ImportTable newImportTable = new ImportTable();
-//                newImportTable.setId(UUID.randomUUID().toString());
-//                newImportTable.setbCode(ssImport.getSsBCode());
-//                newImportTable.setPartNumber("-");
-//                newImportTable.setManufacture(importTable.getManufacture());
-//                newImportTable.setCreateBy(importTable.getCreateBy());
-//                newImportTable.setCreateTime(importTable.getCreateTime());
-//                newImportTable.setUpdateBy(userName);
-//                newImportTable.setUpdateTime(Instant.now());
-//                newImportTable.setDelFlag(importTable.getDelFlag());
-//                newImportTable.setItemRegistrationClassification(importTable.getItemRegistrationClassification());
-//                newImportTable.setSpiceModel(importTable.getSpiceModel());
-//                newImportTable.setValue(importTable.getValue());
-//                newImportTable.setPartType(importTable.getPartType());
-//                newImportTable.setTolerance(importTable.getTolerance());
-//                newImportTable.setRatingVoltage(importTable.getRatingVoltage());
-//                newImportTable.setCharacteristics(importTable.getCharacteristics());
-//                newImportTable.setRatingElectricity(importTable.getRatingElectricity());
-//                newImportTable.setSchematicPart(importTable.getSchematicPart());
-//                newImportTable.setPcbFootPrint(importTable.getPcbFootPrint());
-//                newImportTable.setPartsName(importTable.getPartsName());
-//
-//                importTableService.save(newImportTable);
-//                log.info("新しい SS データがインポートテーブルに作成されました: " + newImportTable.getbCode());
-//            }
-//        }
     }
-
 
     /**
      * 将字符串第一个大写字母后的所有大写字母转为小写，每一个下划线后的第一个字母也要大写用于根据大分类名称动态调用方法
@@ -826,5 +908,78 @@ public class ImportProcessResource {
             }
         }
         return result.toString();
+    }
+
+    /**
+     * 删除所有part_number为"-"实体类
+     */
+    public void deleteAllPartNumberDashEntities() {
+        try {
+            // 1. 获取所有动态实体类
+            Set<String> entityClassNames = new HashSet<>();
+
+            // 从ImportTable的remark字段获取所有已使用的实体类名
+            List<ImportTable> allImportTables = importTableRepository.findAll();
+            allImportTables.forEach(table -> {
+                if (table.getRemark() != null && !table.getRemark().isEmpty()) {
+                    entityClassNames.add(table.getRemark());
+                }
+            });
+
+            // 2. 为每个实体类执行删除操作
+            for (String className : entityClassNames) {
+                try {
+                    // 动态获取repository和service
+                    Class<?> repositoryClass = repositoryClassCache.computeIfAbsent(className, k -> {
+                        try {
+                            return Class.forName("com.chenhy.repository.commonEntity." + className + "Repository");
+                        } catch (ClassNotFoundException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+
+                    Class<?> serviceClass = serviceClassCache.computeIfAbsent(className, k -> {
+                        try {
+                            return Class.forName("com.chenhy.service.impl.commonEntity." + className + "ServiceImpl");
+                        } catch (ClassNotFoundException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+
+                    Object repository = applicationContext.getBean(repositoryClass);
+                    Object service = applicationContext.getBean(serviceClass);
+
+                    // 3. 动态调用findByPartNumber方法
+                    Method findByMethod = repositoryClass.getMethod("findByPartNumber", String.class);
+                    @SuppressWarnings("unchecked")
+                    List<Object> entitiesToDelete = (List<Object>) findByMethod.invoke(repository, "-");
+
+                    // 4. 动态删除找到的实体
+                    if (entitiesToDelete != null && !entitiesToDelete.isEmpty()) {
+                        Method deleteMethod = serviceClass.getMethod("delete", Object.class);
+                        for (Object entity : entitiesToDelete) {
+                            // 获取ID用于日志记录
+                            Method getIdMethod = entity.getClass().getMethod("getbCode");
+                            String entityId = (String) getIdMethod.invoke(entity);
+
+                            deleteMethod.invoke(service, entity);
+                            log.info("Deleted {} entity with ID: {}", className, entityId);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("Error processing entity class {}: {}", className, e.getMessage(), e);
+                }
+            }
+
+            // 5. 最后删除ImportTable中partNumber为"-"的记录
+            List<ImportTable> importTablesToDelete = importTableRepository.findByPartNumber("-");
+            for (ImportTable importTable : importTablesToDelete) {
+                importTableService.delete(importTable.getId());
+                log.info("Deleted ImportTable with ID: {}", importTable.getId());
+            }
+
+        } catch (Exception e) {
+            log.error("Error in deleteAllPartNumberDashEntities: {}", e.getMessage(), e);
+        }
     }
 }
