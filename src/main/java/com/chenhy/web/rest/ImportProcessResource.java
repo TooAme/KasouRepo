@@ -52,6 +52,7 @@ public class ImportProcessResource {
     private static final Map<String, Class<?>> repositoryClassCache = new HashMap<>();
     private static final Map<String, Class<?>> serviceClassCache = new HashMap<>();
     private final String userName = getCurrentUsername();
+    private final Object lock = new Object();
 
     @PostConstruct
     public void init() throws IOException {
@@ -162,7 +163,6 @@ public class ImportProcessResource {
 
     private void processNormalFile(File file) {
         if (file == null) return;
-
         log.info("普通単品ファイルの取り扱いでいます: " + file.getName());
 
         try (FileInputStream fis = new FileInputStream(file)) {
@@ -235,8 +235,21 @@ public class ImportProcessResource {
                             Optional<?> existingTable = (Optional<?>) findMethod.invoke(repository, bCode);
                             Object importTable;
 
+                            ImportTable  remarkData;// 先创建通用表记录
                             List<ImportTable> existingImportTable = importTableRepository.findByBCodeContaining(bCode);
-                            ImportTable remarkData = existingImportTable.get(0);
+                            if (existingImportTable.isEmpty()) {
+                                remarkData = new ImportTable(); // 如果为空，初始化一个新的 ImportTable 对象
+                                remarkData.setId(UUID.randomUUID().toString());
+                            } else {
+                                remarkData = existingImportTable.get(0); // 否则获取第一个元素
+                            }
+                            remarkData.setbCode(bCode + "-" + Instant.now().toString());
+                            remarkData.setPartNumber("mark");
+                            remarkData.setPartType("mark");
+                            remarkData.setRemark(classifyName);
+                            importTableService.save(remarkData);
+
+
                             if (existingTable.isPresent()) { // 如果数据已存在，更新该条记录
                                 importTable = existingTable.get();
                                 log.info("管理番号に従ってデータを更新中: " + bCode);
@@ -245,23 +258,18 @@ public class ImportProcessResource {
 //                                setUpdateByMethod.invoke(importTable, getCurrentUsername());
 //                                java.lang.reflect.Method setUpdateTimeMethod = importTable.getClass().getMethod("setUpdateTime", Instant.class);
 //                                setUpdateTimeMethod.invoke(importTable, Instant.now());
-                            } else { // 如果数据不存在，创建新记录
+                            }
+                            else { // 如果数据不存在，创建新记录
                                 Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
                                 importTable = entityClass.getDeclaredConstructor().newInstance();
                                 remarkData = new ImportTable();
                                 log.info("管理番号から新しいデータを作成中: " + bCode);
                                 setTableCharacter(importTable, row, "COMMON", "B_CODE");
-                            }
-                                remarkData.setId(UUID.randomUUID().toString());
-                                remarkData.setbCode(bCode + "-" + Instant.now().toString());
-                                remarkData.setPartNumber("mark");
-                                remarkData.setPartType("mark");
-                                remarkData.setRemark(classifyName);
-                                importTableService.save(remarkData);
-
                                 Method setIdMethod = importTable.getClass().getMethod("setId", String.class);
                                 String uuid = UUID.randomUUID().toString();
                                 setIdMethod.invoke(importTable, uuid);
+                            }
+
                                 Method setPartTypeMethod = importTable.getClass().getMethod("setPartType", String.class);
                                 setPartTypeMethod.invoke(importTable, mattanName);
                                 Method setCreateByMethod = importTable.getClass().getMethod("setCreateBy", String.class);
@@ -350,17 +358,19 @@ public class ImportProcessResource {
                                 }
 
                             // 保存或更新记录
-                            Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
-                            Method saveMethod = serviceClass.getMethod("save", entityClass);
-                            saveMethod.invoke(service, importTable);
+                            synchronized (lock) {
+                                Class<?> entityClass = Class.forName("com.chenhy.domain.commonEntity." + classifyName);
+                                Method saveMethod = serviceClass.getMethod("save", entityClass);
+                                saveMethod.invoke(service, importTable);
+                            }
 
                             CURRENT_TABLE_NAME.remove();
                         } catch (Exception e) {
-                            log.error(e.getMessage());
+                            log.error(e.getMessage(), e);
                         }
                     })).join();
             } catch (Exception e) {
-                log.error(e.getMessage());
+                log.error(e.getMessage(), e);
                 log.error("{} は既に使われていません。" ,classifyName);
             }
         } catch (IOException e) {
