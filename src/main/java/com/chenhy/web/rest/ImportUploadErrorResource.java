@@ -116,16 +116,12 @@ public class ImportUploadErrorResource {
                 log.info("Deleted existing file: {}", targetLocation);
             }
             Files.copy(file.getInputStream(), targetLocation);
+
+
+
             // 检查文件内容
             FileValidationResult validationResult = validateExcelFile(targetLocation.toString());
 
-//            byte[] fileBytes = file.getBytes();
-//            try (InputStream is = new ByteArrayInputStream(fileBytes);
-//                 Workbook workbook = new XSSFWorkbook(is)) {
-//                // 直接验证内存中的Excel文件
-//                FileValidationResult validationResult = validateExcelWorkbook(workbook);
-//                // ... rest of the logic
-//            }
             // 创建importHistory记录
             ImportHistory importHistory = new ImportHistory();
             importHistory.setUuid(uuid);
@@ -281,7 +277,7 @@ public class ImportUploadErrorResource {
                             ) {
                                 if (nextRow != null) {
                                     if (nextCell1 != null && !getCellValue(nextCell1).isEmpty()) {
-                                        if (importTableRepository.findByBCode(getCellValue(nextCell1) + "*").isEmpty()) {
+                                        if (importTableRepository.findByBCodeContaining(getCellValue(nextCell1)).isEmpty()) {
                                             if (result.errorMessage.length() < 4800 && result.errorLine.length() < 240) result.addError(
                                                 // 错误信息超长截断
                                                 "ERR009_SS子部品の管理番号(" +
@@ -294,78 +290,6 @@ public class ImportUploadErrorResource {
                                 }
                             }
                         }
-
-/* ////////////////////////////////////////////////////////////////////////////////////////////////////////
-                     String commonEntityPath = "src/main/java/com/chenhy/domain/commonEntity";
-                    List<String> fileNames = getFileNames(commonEntityPath);
-                    if (fileNames != null) {
-                        List<String> classifyNames = fileNames.stream()
-                            .map(fileName -> fileName.replace(".java", ""))
-                            .toList();
-                       for (String classifyName : classifyNames) {
-                            // 假设 classifyName 是 "User"，则完整类名为 com.chenhy.repository.commonEntity.UserRepository
-                            String repositoryClassName = "com.chenhy.repository.commonEntity." + classifyName + "Repository";
-                            log.info("searching SS subBcode: " + repositoryClassName);
-
-                            for (int i = 2; i < sheet1.getLastRowNum() + 1; i++) { // 从第3行開始遍历
-                                //log.info("ラインを読み込む中:　" + i + " 総ライン数: " + sheet1.getLastRowNum());
-                                Row row = sheet1.getRow(i);
-                                if (isRowEmpty(row)) break;
-                                if (
-                                    row != null &&
-                                        row.getCell(0) != null &&
-                                        row.getCell(1) == null &&
-                                        sheet1.getRow(i + 1) != null &&
-                                        sheet1.getRow(i + 1).getCell(1) != null
-                                ) {
-                                    Cell cell0 = row.getCell(0);
-                                    Row nextRow = sheet1.getRow(i + 1);
-                                    Cell nextCell1 = nextRow.getCell(1);
-                                    if (
-                                        cell0 != null && !getCellValue(cell0).isEmpty() && nextCell1 != null && !getCellValue(nextCell1).isEmpty()
-                                    ) {
-                                        if (nextRow != null) {
-                                            if (nextCell1 != null && !getCellValue(nextCell1).isEmpty()) {
-
-                                                try {
-                                                    Class<?> repositoryClass = Class.forName(repositoryClassName);
-                                                    Object repositoryBean = applicationContext.getBean(repositoryClass);
-
-                                                    // 调用 findByBCode 方法（注意：这里需要使用反射调用方法）
-                                                    java.lang.reflect.Method method = repositoryClass.getMethod("findByBCode", String.class);
-                                                    Object findResult = method.invoke(repositoryBean, getCellValue(nextCell1));
-
-                                                    // 判断是否为空（假设返回类型是 Optional 或 Collection）
-                                                    boolean isEmpty = false;
-                                                    if (findResult instanceof Collection<?>) {
-                                                        isEmpty = ((Collection<?>) findResult).isEmpty();
-                                                    } else if (findResult instanceof Optional<?>) {
-                                                        isEmpty = ((Optional<?>) findResult).isEmpty();
-                                                    }
-
-                                                    if (isEmpty) {
-                                                        // 添加错误信息
-                                                        if (result.errorMessage.length() < 4800 && result.errorLine.length() < 240) {
-                                                            result.addError(
-                                                                "ERR009_SS子部品の管理番号(" +
-                                                                    getCellValue(nextCell1) +
-                                                                    ")が存在しません。（The SS sub part code does not exist.）",
-                                                                String.valueOf(i + 1)
-                                                            );
-                                                        }
-                                                    }
-
-                                                } catch (Exception e) {
-                                                    log.error("Error dynamically invoking findByBCode on {}", repositoryClassName, e);
-                                                }
-
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        *///////////////////////////////////////////////////////////////////////
                     }
                 }
                 return result;

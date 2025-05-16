@@ -63,6 +63,8 @@ export default defineComponent({
   data() {
     return {
       selectedFiles: [] as File[],
+      normalFiles: [] as File[],
+      ssListFile: null as File | null,
       isUploading: false,
       uploadStatus: null as UploadStatus | null,
     };
@@ -75,12 +77,27 @@ export default defineComponent({
     handleFileSelect(event: Event) {
       const fileInput = event.target as HTMLInputElement;
       if (fileInput.files?.length) {
-        for (let i = 0; i < fileInput.files.length; i++) {
-          const file = fileInput.files[i];
+        const files = Array.from(fileInput.files);
+        this.normalFiles = [];
+        this.ssListFile = null;
+
+        // 分离普通文件和SS列表文件
+        for (const file of files) {
           if (this.validateFile(file)) {
-            this.selectedFiles.push(file);
+            if (file.name.toLowerCase().includes('ss部品リスト') || file.name.toLowerCase().includes('ss_list')) {
+              this.ssListFile = file;
+            } else {
+              this.normalFiles.push(file);
+            }
           }
         }
+
+        // 更新显示的文件列表
+        this.selectedFiles = [...this.normalFiles];
+        if (this.ssListFile) {
+          this.selectedFiles.push(this.ssListFile);
+        }
+
         // 清空 input，允许再次选择同一文件
         fileInput.value = '';
       }
@@ -98,6 +115,12 @@ export default defineComponent({
       return true;
     },
     removeFile(index: number) {
+      const file = this.selectedFiles[index];
+      if (this.ssListFile && file.name === this.ssListFile.name) {
+        this.ssListFile = null;
+      } else {
+        this.normalFiles = this.normalFiles.filter(f => f.name !== file.name);
+      }
       this.selectedFiles.splice(index, 1);
     },
     async uploadFiles() {
@@ -110,49 +133,19 @@ export default defineComponent({
       };
 
       try {
-        const successFiles: string[] = [];
-        const failedFiles: string[] = [];
+        // 1. 先上传并处理所有普通文件
+        const normalResults = await this.processFiles(this.normalFiles, 'normal');
 
-        // 逐个上传文件
-        for (const file of this.selectedFiles) {
-          try {
-            await this.uploadSingleFile(file);
-            successFiles.push(file.name);
-          } catch (error) {
-            failedFiles.push(file.name);
-          }
+        // 2. 如果有SS列表文件，在所有普通文件处理完成后上传
+        let ssResult = null;
+        if (this.ssListFile) {
+          ssResult = await this.processFiles([this.ssListFile], 'ss');
         }
 
-        // 根据上传结果设置状态信息
-        if (failedFiles.length === 0) {
-          this.uploadStatus = {
-            type: 'success',
-            message: `全部${successFiles.length}個のファイルがアップロードされました`,
-          };
-          this.selectedFiles = []; // 清空已选择文件列表
-          try {
-            await apiClient.post('/import/process-all-files');
-          } catch (error) {
-            this.uploadStatus = {
-              type: 'error',
-              message: 'ファイル処理中にエラーが発生しました：' + (error.message || '未知のエラー'),
-            };
-          }
-        } else if (successFiles.length === 0) {
-          this.uploadStatus = {
-            type: 'error',
-            message: `全部${failedFiles.length}個のファイルがアップロードに失敗しました`,
-          };
-        } else {
-          this.uploadStatus = {
-            type: 'info',
-            message: `${successFiles.length}個のファイルがアップロードされました，${failedFiles.length}個のファイルがアップロードに失敗しました`,
-          };
-          // 从选择文件列表中移除成功上传的文件
-          this.selectedFiles = this.selectedFiles.filter(file => !successFiles.includes(file.name));
-        }
+        // 3. 处理结果反馈
+        this.handleUploadResults(normalResults, ssResult);
 
-        // 触发刷新事件，父组件可以监听
+        // 4. 触发刷新事件
         this.$emit('refresh');
       } catch (error: any) {
         this.uploadStatus = {
@@ -161,6 +154,59 @@ export default defineComponent({
         };
       } finally {
         this.isUploading = false;
+      }
+    },
+    async processFiles(files: File[], type: 'normal' | 'ss') {
+      const results = {
+        successFiles: [] as string[],
+        failedFiles: [] as string[],
+      };
+
+      for (const file of files) {
+        try {
+          await this.uploadSingleFile(file);
+          results.successFiles.push(file.name);
+
+          // 立即处理
+            await apiClient.post('/import/process-all-files');
+        } catch (error) {
+          results.failedFiles.push(file.name);
+        }
+      }
+
+      return results;
+    },
+    handleUploadResults(normalResults: any, ssResult: any) {
+      let successCount = normalResults.successFiles.length;
+      let failedCount = normalResults.failedFiles.length;
+
+      if (ssResult) {
+        successCount += ssResult.successFiles.length;
+        failedCount += ssResult.failedFiles.length;
+      }
+
+      if (failedCount === 0) {
+        this.uploadStatus = {
+          type: 'success',
+          message: `全部${successCount}個のファイルがアップロードされました`,
+        };
+        this.selectedFiles = [];
+        this.normalFiles = [];
+        this.ssListFile = null;
+      } else if (successCount === 0) {
+        this.uploadStatus = {
+          type: 'error',
+          message: `全部${failedCount}個のファイルがアップロードに失敗しました`,
+        };
+      } else {
+        this.uploadStatus = {
+          type: 'info',
+          message: `${successCount}個のファイルがアップロードされました，${failedCount}個のファイルがアップロードに失敗しました`,
+        };
+        this.selectedFiles = this.selectedFiles.filter(file =>
+          !normalResults.successFiles.includes(file.name) &&
+          !(ssResult && ssResult.successFiles.includes(file.name))
+        );
       }
     },
     async uploadSingleFile(file: File) {

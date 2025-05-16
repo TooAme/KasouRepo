@@ -164,6 +164,12 @@ public class ImportProcessResource {
             processedFiles.add(file.getAbsolutePath());
         }
         injectSSIntoImportTable();
+        //删除父文件夹内所有文件,但不删除文件夹
+        for (File fileToDelete : directory.listFiles()) {
+            if (fileToDelete != null) {
+                fileToDelete.delete();
+            }
+        }
     }
 
     //@Async("taskExecutor")
@@ -313,9 +319,13 @@ public class ImportProcessResource {
                                 int LW = 0;
                                 if (mattanName.contains("コンデンサ") || mattanName.contains("抵抗器")) {
                                     String L = getCellValue(row.getCell(getCellPos(characteristicRow, "Body_length_Typ")));
+                                    log.info("L: {}",L);
                                     String LM = getCellValue(row.getCell(getCellPos(characteristicRow, "Body_length_Max")));
+                                    log.info("LM: {}",LM);
                                     String W = getCellValue(row.getCell(getCellPos(characteristicRow, "Body_breadth_Typ")));
+                                    log.info("W: {}",W);
                                     String WM = getCellValue(row.getCell(getCellPos(characteristicRow, "Body_breadth_Max")));
+                                    log.info("WM: {}",WM);
                                     if (!L.isEmpty() && !W.isEmpty()) {
                                         LW = (int) (Double.parseDouble(L) * 1000) + (int) (Double.parseDouble(W) * 10);
                                     } else if (!LM.isEmpty() && !WM.isEmpty()) {
@@ -591,11 +601,11 @@ public class ImportProcessResource {
                         String value = getComplexCellValue(row, cvt(tcisIncol));
                         // 特殊处理逻辑
                         if ("PART_NUMBER".equals(settingCharacter2) || "MANUFACTURE".equals(settingCharacter2)) {
-                            if (getCellValue(row.getCell(Integer.parseInt(cvt(tcisIncol)) + 1)).equals("N/A")) {
+                            //if (getCellValue(row.getCell(Integer.parseInt(cvt(tcisIncol)) + 1)).equals("N/A")) {
                                 setterMethod.invoke(importTable, value);
-                            } else {
-                                setterMethod.invoke(importTable, getCellValue(row.getCell(Integer.parseInt(cvt(tcisIncol)) + 1)));
-                            }
+//                            } else {
+//                                setterMethod.invoke(importTable, getCellValue(row.getCell(Integer.parseInt(cvt(tcisIncol)) + 1)));
+//                            }
                         } else if ("DEL".equals(settingCharacter2)) {
                             Method setDelFlagMethod = importTable.getClass().getMethod("setDelFlag", boolean.class);
                             if (value.isEmpty()) {
