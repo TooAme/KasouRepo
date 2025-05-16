@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -52,7 +53,7 @@ public class ImportProcessResource {
     private Sheet attributeSheet;
     private static final Map<String, Class<?>> repositoryClassCache = new HashMap<>();
     private static final Map<String, Class<?>> serviceClassCache = new HashMap<>();
-    private static final String userName = getCurrentUsername();
+    //public String userName = getCurrentUsername();
     private final Object lock = new Object();
 
     @PostConstruct
@@ -67,8 +68,7 @@ public class ImportProcessResource {
      * 获取jhi当前用户名
      * @return 用户名字符串
      */
-    @PostConstruct
-    public static String getCurrentUsername() {
+    public String getCurrentUsername() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof String) {
             return (String) authentication.getPrincipal();
@@ -95,6 +95,7 @@ public class ImportProcessResource {
         this.applicationContext = applicationContext;
     }
 
+    @PreAuthorize("isAuthenticated()")
     public void processAllFiles() {
         // 获取文件列表
         List<File> ssListFile = new ArrayList<>();
@@ -167,6 +168,8 @@ public class ImportProcessResource {
 
     //@Async("taskExecutor")
     public void processNormalFile(File file) {
+        // 在主线程获取认证信息
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (file == null) return;
         log.info("普通単品ファイルの取り扱いでいます: " + file.getName());
 
@@ -211,6 +214,8 @@ public class ImportProcessResource {
                 customThreadPool.submit(() -> IntStream.rangeClosed(10,sheet.getLastRowNum())
                     .parallel()
                     .forEach(rowIndex -> {
+                        // 在每个工作线程中设置安全上下文
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
                         try {
                             Row row = sheet.getRow(rowIndex);
                             if (row == null) return;
@@ -278,11 +283,11 @@ public class ImportProcessResource {
                                 Method setPartTypeMethod = importTable.getClass().getMethod("setPartType", String.class);
                                 setPartTypeMethod.invoke(importTable, mattanName);
                                 Method setCreateByMethod = importTable.getClass().getMethod("setCreateBy", String.class);
-                                setCreateByMethod.invoke(importTable, userName);
+                                setCreateByMethod.invoke(importTable, getCurrentUsername());
                                 Method setCreateTimeMethod = importTable.getClass().getMethod("setCreateTime", Instant.class);
                                 setCreateTimeMethod.invoke(importTable, Instant.now());
                                 Method setUpdateByMethod = importTable.getClass().getMethod("setUpdateBy", String.class);
-                                setUpdateByMethod.invoke(importTable, userName);
+                                setUpdateByMethod.invoke(importTable, getCurrentUsername());
                                 Method setUpdateTimeMethod = importTable.getClass().getMethod("setUpdateTime", Instant.class);
                                 setUpdateTimeMethod.invoke(importTable, Instant.now()); // 创建同时也是更新
                                 log.info("末端分類名: " + mattanName);
@@ -368,10 +373,11 @@ public class ImportProcessResource {
                                 Method saveMethod = serviceClass.getMethod("save", entityClass);
                                 saveMethod.invoke(service, importTable);
                             }
-
-                            CURRENT_TABLE_NAME.remove();
                         } catch (Exception e) {
                             log.error(e.getMessage(), e);
+                        } finally  {
+                            // 清理安全上下文
+                            SecurityContextHolder.clearContext();
                         }
                     })).join();
             } catch (Exception e) {
@@ -809,13 +815,13 @@ public class ImportProcessResource {
 
                         // 设置审计字段
                         Method setCreateByMethod = entityClass.getMethod("setCreateBy", String.class);
-                        setCreateByMethod.invoke(newEntity, userName);
+                        setCreateByMethod.invoke(newEntity, getCurrentUsername());
 
                         Method setCreateTimeMethod = entityClass.getMethod("setCreateTime", Instant.class);
                         setCreateTimeMethod.invoke(newEntity, Instant.now());
 
                         Method setUpdateByMethod = entityClass.getMethod("setUpdateBy", String.class);
-                        setUpdateByMethod.invoke(newEntity, userName);
+                        setUpdateByMethod.invoke(newEntity, getCurrentUsername());
 
                         Method setUpdateTimeMethod = entityClass.getMethod("setUpdateTime", Instant.class);
                         setUpdateTimeMethod.invoke(newEntity, Instant.now());

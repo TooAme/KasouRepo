@@ -146,7 +146,7 @@ public class ImportUploadErrorResource {
                 detail.setUuid(uuid);
                 detail.setTcihdLine(validationResult.getErrorLine());
                 detail.setTcihdError(validationResult.getErrorMessage());
-                detail.setCreateBy(System.getProperty("user.name"));
+                detail.setCreateBy(importProcessResource.getCurrentUsername());
                 detail.setCreateTime(Instant.now());
                 detail.setDelFlag(false);
                 importHistoryDetailService.save(detail);

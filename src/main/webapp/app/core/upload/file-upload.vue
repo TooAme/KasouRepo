@@ -317,7 +317,6 @@ h4 {
 .upload-status {
   margin-top: 12px;
   padding: 10px;
-  margin-right: 548px;
   border-radius: 4px;
   display: flex;
   justify-content: space-between;
