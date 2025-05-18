@@ -338,9 +338,13 @@ public class ImportProcessResource {
                                 }
                                 Method setSchematicPartMethod = importTable.getClass().getMethod("setSchematicPart", String.class);
                                 Method setPcbFootPrintMethod = importTable.getClass().getMethod("setPcbFootPrint", String.class);
-                                if (mattanName.contains("電解コンデンサ")) {
+                                if (mattanName.contains("ネットワーク抵抗器")) {
+                                    if (
+                                        getCellValue(row.getCell(getCellPos(characteristicRow, "Mount_method"))).equals("基板挿入")
+                                    ) setPcbFootPrintMethod.invoke(importTable, "R_" + LW + "_DIP");
+                                    else setPcbFootPrintMethod.invoke(importTable, "R_" + LW);
+                                } else if (mattanName.contains("電解コンデンサ")) {
                                     setSchematicPartMethod.invoke(importTable, "CE");
-
                                     if (
                                         getCellValue(row.getCell(getCellPos(characteristicRow, "Mount_method"))).equals("基板挿入")
                                     ) setPcbFootPrintMethod.invoke(importTable, "CE_" + LW + "_DIP");
